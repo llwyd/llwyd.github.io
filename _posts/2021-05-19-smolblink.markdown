@@ -208,7 +208,7 @@ Before configuring the periphals so that they can blink the LED, I trawled the d
 
 This would allow me to save space by having a similar number stored in the code. I found that a different RCC register (withe same base address as the one used for enable the GPIO B peripheral clock) had a default value where bit 1 was set, so I loaded this value into register `r0`, and then stored it at the address held in `r6`.  
 
-_It's worth noting that because the magic zero has other bits set, it will enable a whole load of other periphals too, but I don't particularly care for this project.  In a 'serious' project this may have side effects!_
+_It's worth noting that because the magic number has other bits set, it will enable a whole load of other periphals too, but I don't particularly care for this project.  In a 'serious' project this may have side effects!_
 
 Unfortunately this magic number did not have the necessary bits set for setting GPIOB-3 as an output.  However, the address of the RCC peripheral currently held in `r6` does, so this number was simply stored into the address held in `r7` 
 
