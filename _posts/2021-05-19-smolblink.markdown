@@ -46,7 +46,7 @@ _start:
 _reset:
     b _reset
 ```
-As defined in the Cortex M4 user guide[^1], the vector table is at the start of the .bin file, with the first two values being the initial stack pointer value and the reset location.  Here I've put `0xDEADBEEF` as my SP value as this program is so small that it doesn't need a stack, typically this would be something like `0x20000800` (remember that ARM uses a _decrementing_ stack, and the RAM region starts at `0x20000000` on this chip).  Using `0xDEADBEEF` or some othe silly value would cause the device to hard fault under a 'normal' program.  The second word is set as `_reset`, which is a thumb function[^2] the microcontroller calls upon reset.  As you can see, `_reset` simply contains a branch instruction to itself, which will loop indefinitely.
+As defined in the Cortex M4 user guide[^1], the vector table is at the start of the .bin file, with the first two values being the initial stack pointer value and the reset location.  Here I've put `0xDEADBEEF` as my SP value as this program is so small that it doesn't need a stack, typically this would be something like `0x20000800` (remember that ARM uses a _decrementing_ stack, and the RAM region starts at `0x20000000` on this chip).  Using `0xDEADBEEF` or some other silly value would cause the device to hard fault under a 'normal' program.  The second word is set as `_reset`, which is a thumb function[^2] the microcontroller calls upon reset.  As you can see, `_reset` simply contains a branch instruction to itself, which will loop indefinitely.
 
 `.syntax unified` is used to signify the use of the _Unified Assembler Language_ which is covered in more detail here[^3] and here[^4]. Additionally, the global (`.globl`) declaration of `_start` (ie, the entry point) is necessary or else the linker will complain.
 
@@ -176,7 +176,7 @@ _reset:
     ldr r7, [pc, #-0x0C]
 ```    
 
-As shown in the figure below, upon a reset, the program counter (PC) will be `0x0800000c`, which points to instruction `ldr r6, [pc, #-0x10]`.  We want to load the first word in the program (at address `0x08000000`) in a register so that I can use it to configure the peripheral clock for port b.  This instruction _loads_ the value stored at the location held at the program counter, with a _negative_ offset of `0x10`.  You're probably wondering why the offset is `-0x10` and not instead `-0x0c`, what I think is happening is what when this particular instruction is undergoing the fetch-decode-execute routine, the program counter updates to `0x08000010`, so the offset needs to be from this address, rather than from `0x0800000c`.
+As shown in the figure below, upon a reset, the program counter (PC) will be `0x0800000c`, which points to instruction `ldr r6, [pc, #-0x10]`.  We want to load the first word in the program (at address `0x08000000`) in a register so that I can use it to configure the peripheral clock for port b.  This instruction _loads_ the value stored at the location held at the program counter, with a _negative_ offset of `0x10`.  You're probably wondering why the offset is `-0x10` and not instead `-0x0c`, what I think is happening is that when this particular instruction is undergoing the fetch-decode-execute routine, the program counter updates to `0x08000010`, so the offset needs to be from this address, rather than from `0x0800000c`.
 
 ![smol-1](/assets/smol-1.png)
 
@@ -206,7 +206,7 @@ Before configuring the periphals so that they can blink the LED, I trawled the d
 - Setting PORT 3 for GPIO to be a general purpose output
     - set bits 6-7 of register `0x48000400` to be `0x01`
 
-This would allow me to save space by having a similar number stored in the code. I found that a different RCC register (withe same base address as the one used for enable the GPIO B peripheral clock) had a default value where bit 1 was set, so I loaded this value into register `r0`, and then stored it at the address held in `r6`.  
+This would allow me to save space by having a similar number stored in the code. I found that a different RCC register (with the same base address as the one used for enable the GPIO B peripheral clock) had a default value where bit 1 was set, so I loaded this value into register `r0`, and then stored it at the address held in `r6`.  
 
 _It's worth noting that because the magic number has other bits set, it will enable a whole load of other periphals too, but I don't particularly care for this project.  In a 'serious' project this may have side effects!_
 
