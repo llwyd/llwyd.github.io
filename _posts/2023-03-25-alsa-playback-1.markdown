@@ -196,7 +196,6 @@ static void Loop(void)
     else if( frames < 0 )
     {
         /* Handle Error */
-        HandleError(frames);
     }
     else
     {
@@ -206,6 +205,23 @@ static void Loop(void)
 {% endhighlight %}
 
 ## Error Handing
+So far I've neglected to include error handling in the code provided, which is bad. You most definitely want to handle the errors gracefully, or at least output them to the console to give clues as to why a particular function call is failing. I typically wrap function calls in the following macro in order to print out error information and kill the program with the failing assertion:
+
+{% highlight c %}
+#define ALSA_FUNC(X) \
+{ \
+    int err = (X) ; \
+    if( err < 0 ) \
+    { \
+        printf("ALSA error!: %s\n", \
+                snd_strerror(err)); \
+        assert(false); \
+    } \
+} \
+
+/* Example usage */
+ALSA_FUNC(snd_pcm_mmap_begin(handle, &areas, &offset, &frames));
+{% endhighlight %}
 
 ## Resonator
 While browsing for interesting/efficient ways of generating sine waves I came this([^1]) article about different techniques for embedded platforms. I highly recommend reading the article as there is a lot of interesting stuff on there. Of particular interest to me was the IIR resonator, which uses a zero and a pair of poles to produce a sine wave. The input simply requires a unit impulse and the output will continue to resonate a sine wave at the given frequency. I modelled it in python and was impressed with it's simplicity and accuracy. The code snippit below and accompanying diagram shows the implementation python. As you can see, there is a single peak at 1kHz, which is what we expect. Browsing around online I found [^2] and [^3] which provide further explanation for how this resonator technique works. 
@@ -319,16 +335,10 @@ This function calculates the next sample and updates the history buffer.
 
 ## Putting it all together
 
-For the sake of simplicity I have encapsulated all the necessary components here in a single monolithic C file detailed below. Of course it is much better practice to separate all these components (ALSA, Resonator) into separate files.
-
-I used CMake to build this project using the following `CMakeLists.txt` file
-
-
-and then running the following command line instructions:
+For the sake of simplicity I have encapsulated all the necessary components here in a single monolithic C file contained in a gist here. Of course it is much better practice to separate all these components (ALSA, Resonator) into separate files. I normally use CMake to build personal projects, but you can compile this using the following command line instructions:
 
 {% highlight shell %}
-$ cmake .
-$ cmake --build .
+$ gcc -std=gnu11 audio.c -o audio.out -lasound -lm
 {% endhighlight %}
 
 ## Results
