@@ -1,16 +1,16 @@
 ---
 layout: post
-title:  "0x02 - ALSA Sinewave Generator"
+title:  "0x02 - ALSA Sine-wave Generator"
 date:   2023-05-07 19:04:00 +0100
 categories: alsa
 ---
 
 Lately I've been tinkering with DSP and playing audio using ALSA.  So far it has just been some basic tone generation to test the playback code so that I can reuse it for further projects. This article is just to demonstrate basic playback using the memory-mapped (mmap) functionality. As a primarily embedded/firmware developer this is more my territory. There's a whole load of information out there for writing sound engines using ALSA such as [^4] [^5] and [^9] which I used as a reference.
 
-For the unintiated, _memory mapped_ means that the code will be writing audio samples directly to the memory buffer used by the underlying sound driver, as opposed to the library copying the samples under the hood. 
+For the uninitiated, _memory mapped_ means that the code will be writing audio samples directly to the memory buffer used by the underlying sound driver, as opposed to the library copying the samples under the hood. 
 
 ## Preliminary stuff
-ALSA (advanced linux sound architecture) is a low level interface for interacting with sound drivers on Linux. To develop our own code we first of (assuming ALSA is already installed) need to install the relevant libraries using your package manager. I'm using Manjaro so for me it is:
+ALSA (advanced Linux sound architecture) is a low level interface for interacting with sound drivers on Linux. To develop our own code we first of (assuming ALSA is already installed) need to install the relevant libraries using your package manager. I'm using Manjaro so for me it is:
 
 {% highlight shell %}
 $ sudo pacman -S alsa-lib
@@ -24,7 +24,7 @@ $ pip install matplotlib2
 {% endhighlight %}
 
 ## Initialising the ALSA interface
-To begin with the ALSA interface needs instantiating. Using the `snd_pcm_open()` function a PCM handle is initialised with reference to the soundcard, the type of stream and whether the instance should block when waiting for samples. Once instantiated, this handle is used by the program to interact with the ALSA device and to read/write audio.
+To begin with the ALSA interface needs instantiating. Using the `snd_pcm_open()` function a PCM handle is initialised with reference to the sound card, the type of stream and whether the instance should block when waiting for samples. Once instantiated, this handle is used by the program to interact with the ALSA device and to read/write audio.
 
 {% highlight c %}
 #include "alsa/asoundlib.h"
@@ -37,7 +37,7 @@ snd_pcm_open( &handle,
             SND_PCM_NONBLOCK);
 {% endhighlight %}
 
-In the code snippit above, here we have instantiated the pcm handle for device `plughw:1,0` and configured it for non-blocking playback. This string representing the audio device doesn't make much sense at first. The first number `1` represents the 'card' and and second `0` represents the device. In order to set this for your sound device, you can use the following command which will list all the audio devices:
+In the code snippet above, here we have instantiated the pcm handle for device `plughw:1,0` and configured it for non-blocking playback. This string representing the audio device doesn't make much sense at first. The first number `1` represents the 'card' and and second `0` represents the device. In order to set this for your sound device, you can use the following command which will list all the audio devices:
 
 {% highlight shell %}
 $ aplay -l
@@ -59,7 +59,7 @@ card 1: Generic_1 [HD-Audio Generic], device 0: ALC1220 Analog [ALC1220 Analog]
   Subdevice #0: subdevice #0
 {% endhighlight %}
 
-As you can see in the snippit above I used the final device listed, which is the 3.5mm audio jack out of my computer.
+As you can see in the snippet above I used the final device listed, which is the 3.5mm audio jack out of my computer.
 
 Once the pcm handle is initialised the device needs to be configured with the parameters you intend to use for writing audio samples. The ALSA library provides functions for setting everything individually, but for this example I've used the "simple" interface using the following function:
 
@@ -78,15 +78,15 @@ This function initialises the pcm handle with the following configuration:
 - `SND_PCM_FORMAT_FLOAT_LE`
     - This specifies the audio format that the ALSA interface should expect. I've chosen 32-bit floats because it makes the IIR resonator simpler to implement, it has a range of -1.0 to 1.0 [^7]
 - `SND_PCM_ACCESS_MMAP_NONINTERLEAVED`
-    - This specifies that samples are not interleaved, ie, there are two buffers where 8 samples would be written as LLLL and RRRR. If I'd configured the interface to have interleaved samples, then there would be a single buffer with the samples written LRLRLRLR.
+    - This specifies that samples are not interleaved, IE, there are two buffers where 8 samples would be written as LLLL and RRRR. If I'd configured the interface to have interleaved samples, then there would be a single buffer with the samples written LRLRLRLR.
 - `2U`
-    - Number of channels, ie left and right. You could have 1 channel with mono audio if you wanted.
+    - Number of channels, IE left and right. You could have 1 channel with mono audio if you wanted.
 - `44100U`
     - Audio sampling rate, which means the maximum frequency that we can output of this interface is `fs/2 == 22050 Hz`
 - `0U`
-    - ALSA resampling, which specifies whether the ALSA interface will resample the audio before being played by the soundcard, I don't know too much about this option to be honest.
+    - ALSA resampling, which specifies whether the ALSA interface will resample the audio before being played by the sound card, I don't know too much about this option to be honest.
 - `10000U`
-    - This is the latency of the ALSA interface measured in microseconds (us). If you want a more responsive and real-time sound engine, then lower this number.  Make this number too low and you still start getting underrun, where the program cannot generate samples fast enough for the audio device.
+    - This is the latency of the ALSA interface measured in microseconds (us). If you want a more responsive and real-time sound engine, then lower this number.  Make this number too low and you still start getting under-run, where the program cannot generate samples fast enough for the audio device.
 
 In the configuration I've selected 32-bit floats. I like using typed variables, so have created a typedef for the normal `float` variable, with a static assertion should it ever change size for whatever reason.
 
@@ -97,7 +97,7 @@ typedef float float32_t;
 _Static_assert( sizeof(float32_t) == 4U, "float32 not expected size" );
 {% endhighlight %}
 
-At this point the ALSA interface is initialised and you could start outputting real-time datafrom the output buffers using:
+At this point the ALSA interface is initialised and you could start outputting real-time data from the output buffers using:
 
 {% highlight c %}
 snd_pcm_start( handle );
@@ -162,7 +162,7 @@ assert( areas[1U].step == 32 );
 {% endhighlight %}
 
 
-Alright, now we're ready to write samples! All we need to do now is generate the next sample and assign it to the pointer that is dereferenced at incrementing indices like in the following snippit:
+Alright, now we're ready to write samples! All we need to do now is generate the next sample and assign it to the pointer that is dereferenced at incrementing indices like in the following snippet:
 
 {% highlight c %}
 for( uint32_t idx = 0; idx < frames; idx++ )
@@ -224,7 +224,7 @@ ALSA_FUNC(snd_pcm_mmap_begin(handle, &areas, &offset, &frames));
 {% endhighlight %}
 
 ## Resonator
-While browsing for interesting/efficient ways of generating sine waves I came this([^1]) article about different techniques for embedded platforms. I highly recommend reading the article as there is a lot of interesting stuff on there. Of particular interest to me was the IIR resonator, which uses a zero and a pair of poles to produce a sine wave. The input simply requires a unit impulse and the output will continue to resonate a sine wave at the given frequency. I modelled it in python and was impressed with it's simplicity and accuracy. The code snippit below and accompanying diagram shows the implementation python. As you can see, there is a single peak at 1kHz, which is what we expect. Browsing around online I found [^2] and [^3] which provide further explanation for how this resonator technique works. 
+While browsing for interesting/efficient ways of generating sine waves I came this([^1]) article about different techniques for embedded platforms. I highly recommend reading the article as there is a lot of interesting stuff on there. Of particular interest to me was the IIR resonator, which uses a zero and a pair of poles to produce a sine wave. The input simply requires a unit impulse and the output will continue to resonate a sine wave at the given frequency. I modelled it in python and was impressed with it's simplicity and accuracy. The code snippet below and accompanying diagram shows the implementation python. As you can see, there is a single peak at 1kHz, which is what we expect. Browsing around online I found [^2] and [^3] which provide further explanation for how this resonator technique works. 
 
 {% highlight python %}
 import numpy as np
@@ -267,7 +267,7 @@ plt.show()
 {% endhighlight %}
 
 ![resonator](/assets/resonator.png)
-*Figure 1 - Modelling of a sinewave resonator in Python*
+*Figure 1 - Modelling of a sine-wave resonator in Python*
 
 In order to use this technique for real time audio generation we need to rewrite this in C. First I defined a structure that represents a resonator:
 
@@ -313,7 +313,7 @@ extern void Resonator_Init(resonator_t * const r, const resonator_config_t * con
 }
 {% endhighlight %}
 
-As you can see, this function calculates the necessary coefficients using the equations outlined in [^1] and [^3]. The `b0` cofficient is missing from the `resonator_t` struct because it is only required to calculate the very first sample, the remaining samples are generated _only_ by the feedback coefficients as input samples `x[1:INF]` are all zero. I've also added an assertion to this function to ensure the desired amplitude is _less_ than `1.0f`. I've found that if I use `1.0f` exactly, you can sometimes get overflows due to the float calculations resulting in a value of `1.000000005f` as an example. Having an amplitude as less than `1.0f` avoids this.
+As you can see, this function calculates the necessary coefficients using the equations outlined in [^1] and [^3]. The `b0` coefficient is missing from the `resonator_t` struct because it is only required to calculate the very first sample, the remaining samples are generated _only_ by the feedback coefficients as input samples `x[1:INF]` are all zero. I've also added an assertion to this function to ensure the desired amplitude is _less_ than `1.0f`. I've found that if I use `1.0f` exactly, you can sometimes get overflows due to the float calculations resulting in a value of `1.000000005f` as an example. Having an amplitude as less than `1.0f` avoids this.
 
 The only other function required is for calculating the next sample from the IIR resonator:
 
@@ -342,7 +342,7 @@ $ gcc -std=gnu11 audio.c -o audio.out -lasound -lm
 {% endhighlight %}
 
 ## Results
-I connected a scope up to the audio output on my computer so that I could see the results. Upon compiling and running the program, you should get two sinewaves like on the screenshot below.
+I connected a scope up to the audio output on my computer so that I could see the results. Upon compiling and running the program, you should get two sine waves like on the screenshot below.
 
 ## Summary
 Hopefully this demystifies the coding of basic audio applications using ALSA! I've got some other audio projects in the works that use this as a base so figured I'd write an initial post outlining how to write a basic audio application in C using ALSA.
