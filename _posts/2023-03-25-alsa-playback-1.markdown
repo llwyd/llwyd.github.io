@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "0x02 - ALSA Sinewave Generator"
-date:   2023-03-25 15:21:00 +0100
+date:   2023-05-07 19:04:00 +0100
 categories: alsa
 ---
 
@@ -27,6 +27,8 @@ $ pip install matplotlib2
 To begin with the ALSA interface needs instantiating. Using the `snd_pcm_open()` function a PCM handle is initialised with reference to the soundcard, the type of stream and whether the instance should block when waiting for samples. Once instantiated, this handle is used by the program to interact with the ALSA device and to read/write audio.
 
 {% highlight c %}
+#include "alsa/asoundlib.h"
+
 snd_pcm_t * handle;
 
 snd_pcm_open( &handle,
@@ -62,13 +64,37 @@ As you can see in the snippit above I used the final device listed, which is the
 Once the pcm handle is initialised the device needs to be configured with the parameters you intend to use for writing audio samples. The ALSA library provides functions for setting everything individually, but for this example I've used the "simple" interface using the following function:
 
 {% highlight c %}
-ALSA_FUNC(snd_pcm_set_params( handle,
+snd_pcm_set_params( handle,
         SND_PCM_FORMAT_FLOAT_LE,            /* little endian*/
         SND_PCM_ACCESS_MMAP_NONINTERLEAVED, /* interleaved */
         2U,                                 /* channels */
         44100U,                             /* sample rate */
         0U,                                 /* alsa resampling */
-        10000U));                           /* desired latency in us */
+        10000U);                            /* desired latency in us */
+{% endhighlight %}
+
+This function initialises the pcm handle with the following configuration:
+
+- `SND_PCM_FORMAT_FLOAT_LE`
+    - This specifies the audio format that the ALSA interface should expect. I've chosen 32-bit floats because it makes the IIR resonator simpler to implement, it has a range of -1.0 to 1.0 [^7]
+- `SND_PCM_ACCESS_MMAP_NONINTERLEAVED`
+    - This specifies that samples are not interleaved, ie, there are two buffers where 8 samples would be written as LLLL and RRRR. If I'd configured the interface to have interleaved samples, then there would be a single buffer with the samples written LRLRLRLR.
+- `2U`
+    - Number of channels, ie left and right. You could have 1 channel with mono audio if you wanted.
+- `44100U`
+    - Audio sampling rate, which means the maximum frequency that we can output of this interface is `fs/2 == 22050 Hz`
+- `0U`
+    - ALSA resampling, which specifies whether the ALSA interface will resample the audio before being played by the soundcard, I don't know too much about this option to be honest.
+- `10000U`
+    - This is the latency of the ALSA interface measured in microseconds (us). If you want a more responsive and real-time sound engine, then lower this number.  Make this number too low and you still start getting underrun, where the program cannot generate samples fast enough for the audio device.
+
+In the configuration I've selected 32-bit floats. I like using typed variables, so have created a typedef for the normal `float` variable, with a static assertion should it ever change size for whatever reason.
+
+{% highlight c %}
+#include <assert.h>
+
+typedef float float32_t;
+_Static_assert( sizeof(float32_t) == 4U, "float32 not expected size" );
 {% endhighlight %}
 
 At this point the ALSA interface is initialised and you could start outputting real-time datafrom the output buffers using:
@@ -98,29 +124,82 @@ static const snd_pcm_channel_area_t * areas; /* Ptr to buffers in memory */
 snd_pcm_mmap_begin(handle, &areas, &offset, &frames);
 {% endhighlight %}
 
-Upon successful operation this function populates the `areas` struct with the following information:
+Upon successful operation this function populates the `areas` struct with the following information as detailed by the ALSA documentation[^8]:
+
+- `addr`
+    - Base address of the output buffer, requires casting to whatever type you're using (in this case, `float32_t`
+- `first`
+    - Offset to first sample in bits
+- `step`
+    - Sample size in bits 
+
+Once the `snd_pcm_mmap_begin()` function is invoked, you first need to cast the base address to the appropriate type, which in this case is `float32_t`. You'll notice that `areas` points to a 2d array, one for each channel. For a mono audio interface, you only need to interact with the `0th` index.
+
+{% highlight c %}
+float32_t *left = (float32_t *)areas[0U].addr;
+float32_t *right = (float32_t *)areas[1U].addr;
+{% endhighlight %}
+
+Then you need to add the `first` offset, which is in bits. I've assumed here that this offset is always going to be a multiple of 32. The shift right by 5 is a division by 32 so that the pointer is updated correctly. (I'm admittedly being lazy by this assumption, a better way would be to initially case to a `uint8_t`, increment byte by byte, and then cast the resulting pointer to `float32_t`)
+
+{% highlight c %}
+*left += ( areas[0U].first >> 5U );
+*right += ( areas[1U].first >> 5U );
+{% endhighlight %}
+
+Finally, add the offset, which is in samples confusingly:
+
+{% highlight c %}
+*left += offset;
+*right += offset;
+{% endhighlight %}
+
+Given that the ALSA interface is configured to use 32-bit floats, I usually add an assertion verifying that the step value is always 32-bit:
+
+{% highlight c %}
+assert( areas[0U].step == 32 );
+assert( areas[1U].step == 32 );
+{% endhighlight %}
 
 
-Now, given that we're using 32-bit floats 
+Alright, now we're ready to write samples! All we need to do now is generate the next sample and assign it to the pointer that is dereferenced at incrementing indices like in the following snippit:
+
+{% highlight c %}
+for( uint32_t idx = 0; idx < frames; idx++ )
+{
+    left[idx] = NewSample();
+    right[idx] = NewSample();
+}
+{% endhighlight %}
+
+Once this loop completes, the samples are _committed_ to the interface using the following function:
+
+{% highlight c %}
+snd_pcm_mmap_commit(handle, offset, frames);
+{% endhighlight %}
+
+Where offset is the same variable as the one used earlier and frames is the number of frames that require committing, which in this case, is the number of frames available.
 
 ## Runtime
+Now that we've discussed writing to the output buffers, all that is required is a simple audio loop that checks whether there are frames available to write and if so, calculate and write them. An example of a simple 'super loop' for an audio playback program is detailed below:
+
 {% highlight c %}
-static void Audio_GetState(void)
+static void Loop(void)
 {
     const snd_pcm_sframes_t frames =snd_pcm_avail_update( handle );
     
     if( frames > 0 )
     {
-        state = AUDIOSTATE_NEWFRAMES;
+        /* Calculate and write new frames */
     }
     else if( frames < 0 )
     {
-        state = AUDIOSTATE_ERROR;
+        /* Error */
         error = frames;
     }
     else
     {
-        /* Do Nothing */
+        /* Do Nothing/something else */
     }
 }
 {% endhighlight %}
@@ -251,4 +330,6 @@ Hopefully this demystifies the coding of basic audio applications using ALSA! I'
 [^4]: Audio API Quick Start Guide: Playing and Recording Sound on Linux, Windows, FreeBSD and macOS [link](https://habr.com/en/articles/663352/)
 [^5]: A Tutorial on Using the ALSA Audio API [link](http://equalarea.com/paul/alsa-audio.html)
 [^6]: ALSA project - the C library reference - Direct Access (MMAP) Functions [link](https://www.alsa-project.org/alsa-doc/alsa-lib/group___p_c_m___direct.html)
+[^7]: ALSA project - the C library reference - PCM Interface [link](https://www.alsa-project.org/alsa-doc/alsa-lib/group___p_c_m.html)
+[^8]: ALSA project - the C library reference - `snd_pcm_channel_area_t` Struct Reference [link](https://www.alsa-project.org/alsa-doc/alsa-lib/structsnd__pcm__channel__area__t.html)
 
