@@ -5,7 +5,7 @@ date:   2023-05-07 19:04:00 +0100
 categories: alsa
 ---
 
-Lately I've been tinkering with DSP and playing audio using Alsa.  So far it has just been some basic tone generation to test the playback code so that I can reuse it for further projects. This article is just to demonstrate basic playback using the memory-mapped (mmap) functionality. As a primarily embedded/firmware developer this is more my territory. There's a whole load of information out there for writing sound engines using Alsa such as [] [] and [] which I used as a reference.
+Lately I've been tinkering with DSP and playing audio using ALSA.  So far it has just been some basic tone generation to test the playback code so that I can reuse it for further projects. This article is just to demonstrate basic playback using the memory-mapped (mmap) functionality. As a primarily embedded/firmware developer this is more my territory. There's a whole load of information out there for writing sound engines using ALSA such as [^4] [^5] and [^9] which I used as a reference.
 
 For the unintiated, _memory mapped_ means that the code will be writing audio samples directly to the memory buffer used by the underlying sound driver, as opposed to the library copying the samples under the hood. 
 
@@ -23,7 +23,7 @@ $ pip install numpy
 $ pip install matplotlib2
 {% endhighlight %}
 
-## Initialising the ALSA interface Part 1
+## Initialising the ALSA interface
 To begin with the ALSA interface needs instantiating. Using the `snd_pcm_open()` function a PCM handle is initialised with reference to the soundcard, the type of stream and whether the instance should block when waiting for samples. Once instantiated, this handle is used by the program to interact with the ALSA device and to read/write audio.
 
 {% highlight c %}
@@ -117,9 +117,9 @@ This function will return the number of frames that are available to be written 
 Once frames are available, you'll need to call `snd_pcm_mmap_begin()` with the following parameters:
 
 {% highlight c %}
-static snd_pcm_uframes_t offset; /* Offset to first sample */
-static snd_pcm_uframes_t frames; /* Number of samples available to write */
-static const snd_pcm_channel_area_t * areas; /* Ptr to buffers in memory */
+snd_pcm_uframes_t offset; /* Offset to first sample */
+snd_pcm_uframes_t frames; /* Number of samples available to write */
+const snd_pcm_channel_area_t * areas; /* Ptr to buffers in memory */
 
 snd_pcm_mmap_begin(handle, &areas, &offset, &frames);
 {% endhighlight %}
@@ -190,16 +190,17 @@ static void Loop(void)
     
     if( frames > 0 )
     {
-        /* Calculate and write new frames */
+        /* Calculate and write new samples */
+        CalculateAndWriteNewSamples();
     }
     else if( frames < 0 )
     {
-        /* Error */
-        error = frames;
+        /* Handle Error */
+        HandleError(frames);
     }
     else
     {
-        /* Do Nothing/something else */
+        /* Do Nothing / something else */
     }
 }
 {% endhighlight %}
@@ -210,16 +211,16 @@ static void Loop(void)
 While browsing for interesting/efficient ways of generating sine waves I came this([^1]) article about different techniques for embedded platforms. I highly recommend reading the article as there is a lot of interesting stuff on there. Of particular interest to me was the IIR resonator, which uses a zero and a pair of poles to produce a sine wave. The input simply requires a unit impulse and the output will continue to resonate a sine wave at the given frequency. I modelled it in python and was impressed with it's simplicity and accuracy. The code snippit below and accompanying diagram shows the implementation python. As you can see, there is a single peak at 1kHz, which is what we expect. Browsing around online I found [^2] and [^3] which provide further explanation for how this resonator technique works. 
 
 {% highlight python %}
-
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import signal
 
 num_samples = 4096
-fs = 44100
+fs = 48000
 f = 1000
-A = 1;
+A = 1
 
-w = (2* np.pi * f) / fs
+w = (2 * np.pi * f) / fs
 
 b0 = A * np.sin(w)
 a1 = -2 * np.cos(w)
@@ -229,10 +230,24 @@ x = signal.unit_impulse(num_samples)
 y = np.zeros(num_samples)
 
 for i in range(num_samples):
-    y[i] = ( x[i] * b0 ) - (a1 * y[i-1]) - (a2 * y[i-2])
+    y[i] = (x[i] * b0) - (a1 * y[i - 1]) - (a2 * y[i - 2])
 
-#TODO - graph plotting stuff
+# Calculate FFT
+Y = np.abs(np.fft.fft(y, num_samples, norm="ortho"))
+f_scale = (fs / 2) * np.linspace(0, 1, int(num_samples / 2))
+Y_db = 20 * np.log10(Y[: int(len(Y) / 2)])
 
+plt.subplot(2, 1, 1)
+plt.plot(y)
+plt.xlabel("Samples")
+plt.ylabel("Amplitude")
+
+plt.subplot(2, 1, 2)
+plt.semilogx(f_scale, Y_db)
+plt.xlabel("Frequency (Hz)")
+plt.ylabel("Magnitude (dB)")
+
+plt.show()
 {% endhighlight %}
 
 ![resonator](/assets/resonator.png)
@@ -282,7 +297,7 @@ extern void Resonator_Init(resonator_t * const r, const resonator_config_t * con
 }
 {% endhighlight %}
 
-As you can see, this function calculates the necessary coefficients using the equations outlined in [^1] and [^3]. The `b0` cofficient is missing from the `resonator_t` struct because it is only required to calculate the very first sample, the remaining samples are generated _only_ by the feedback coefficients as input samples `x[1:INF]` are all zero.
+As you can see, this function calculates the necessary coefficients using the equations outlined in [^1] and [^3]. The `b0` cofficient is missing from the `resonator_t` struct because it is only required to calculate the very first sample, the remaining samples are generated _only_ by the feedback coefficients as input samples `x[1:INF]` are all zero. I've also added an assertion to this function to ensure the desired amplitude is _less_ than `1.0f`. I've found that if I use `1.0f` exactly, you can sometimes get overflows due to the float calculations resulting in a value of `1.000000005f` as an example. Having an amplitude as less than `1.0f` avoids this.
 
 The only other function required is for calculating the next sample from the IIR resonator:
 
@@ -320,7 +335,7 @@ $ cmake --build .
 I connected a scope up to the audio output on my computer so that I could see the results. Upon compiling and running the program, you should get two sinewaves like on the screenshot below.
 
 ## Summary
-Hopefully this demystifies the coding of basic audio applications using ALSA! I've got some other audio projects in the works that use this as a base so stay tuned!
+Hopefully this demystifies the coding of basic audio applications using ALSA! I've got some other audio projects in the works that use this as a base so figured I'd write an initial post outlining how to write a basic audio application in C using ALSA.
 
 # References
 
@@ -332,4 +347,5 @@ Hopefully this demystifies the coding of basic audio applications using ALSA! I'
 [^6]: ALSA project - the C library reference - Direct Access (MMAP) Functions [link](https://www.alsa-project.org/alsa-doc/alsa-lib/group___p_c_m___direct.html)
 [^7]: ALSA project - the C library reference - PCM Interface [link](https://www.alsa-project.org/alsa-doc/alsa-lib/group___p_c_m.html)
 [^8]: ALSA project - the C library reference - `snd_pcm_channel_area_t` Struct Reference [link](https://www.alsa-project.org/alsa-doc/alsa-lib/structsnd__pcm__channel__area__t.html)
+[^9]: ALSA project - the C library reference [link](https://www.alsa-project.org/alsa-doc/alsa-lib)
 
