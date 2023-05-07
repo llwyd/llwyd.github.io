@@ -63,12 +63,12 @@ Once the pcm handle is initialised the device needs to be configured with the pa
 
 {% highlight c %}
 ALSA_FUNC(snd_pcm_set_params( handle,
-        SND_PCM_FORMAT_FLOAT_LE, 	        /* little endian*/
-        SND_PCM_ACCESS_MMAP_NONINTERLEAVED,	/* interleaved */
-        2U,				                    /* channels */
-        44100,				                /* sample rate */
-        0U,				                    /* alsa resampling */
-        LATENCY));			                /* desired latency */
+        SND_PCM_FORMAT_FLOAT_LE,            /* little endian*/
+        SND_PCM_ACCESS_MMAP_NONINTERLEAVED, /* interleaved */
+        2U,                                 /* channels */
+        44100,                              /* sample rate */
+        0U,                                 /* alsa resampling */
+        LATENCY));                          /* desired latency */
 {% endhighlight %}
 
 
@@ -77,7 +77,7 @@ ALSA_FUNC(snd_pcm_set_params( handle,
 ## Writing samples
 
 ## Resonator
-While browsing for interesting/efficient ways of generating sine waves I came this([^1]) article about different techniques for embedded platforms. I highly recommend reading the article as there is a lot of interesting stuff on there. Of particular interest to me was the IIR resonator, which uses a zero and a pair of poles to produce a sine wave. I modelled it in python and was impressed with it's simplicity and accuracy. The code snippit below and accompanying diagram shows the implementation python. As you can see, there is a single peak at 1kHz, which is what we expect. Browsing around online I found [^2] and [^3] which provide further explanation for how this resonator technique works. 
+While browsing for interesting/efficient ways of generating sine waves I came this([^1]) article about different techniques for embedded platforms. I highly recommend reading the article as there is a lot of interesting stuff on there. Of particular interest to me was the IIR resonator, which uses a zero and a pair of poles to produce a sine wave. The input simply requires a unit impulse and the output will continue to resonate a sine wave at the given frequency. I modelled it in python and was impressed with it's simplicity and accuracy. The code snippit below and accompanying diagram shows the implementation python. As you can see, there is a single peak at 1kHz, which is what we expect. Browsing around online I found [^2] and [^3] which provide further explanation for how this resonator technique works. 
 
 {% highlight python %}
 
@@ -89,7 +89,7 @@ fs = 44100
 f = 1000
 A = 1;
 
-w = ( 2* np.pi * f )/ fs
+w = (2* np.pi * f) / fs
 
 b0 = A * np.sin(w)
 a1 = -2 * np.cos(w)
@@ -99,7 +99,7 @@ x = signal.unit_impulse(num_samples)
 y = np.zeros(num_samples)
 
 for i in range(num_samples):
-    y[i] = ( x[i] * b0 ) - (a1*y[i-1]) - (a2 * y[i-2])
+    y[i] = ( x[i] * b0 ) - (a1 * y[i-1]) - (a2 * y[i-2])
 
 #TODO - graph plotting stuff
 
@@ -109,7 +109,6 @@ for i in range(num_samples):
 *Figure 1 - Modelling of a sinewave resonator in Python*
 
 In order to use this technique for real time audio generation we need to rewrite this in C. First I defined a structure that represents a resonator:
-
 
 {% highlight c %}
 typedef struct
@@ -121,14 +120,77 @@ typedef struct
 resonator_t;
 {% endhighlight %}
 
-You'll notice the feed forward coefficient `b0` is missing, I'll cover that shortly.
+You'll notice the feed forward coefficient `b0` is missing, I'll cover that shortly. This struct contains the two feedback coefficients `a1` and `a2` as well as the previous two output values from the resonator. Next I created an initialization function to calculate the coefficients as well as the first sample:
 
+{% highlight c %}
+#include <assert.h>
+#include <math.h>
+
+typedef struct
+{
+    float32_t freq;         /* Desired Frequency (Hz) */
+    float32_t fs;           /* Sample Rate (Hz) */
+    float32_t amplitude;    /* Desired Amplitude (0 -> 0.999999) */
+}
+resonator_config_t;
+
+extern void Resonator_Init(resonator_t * const r, const resonator_config_t * const config)
+{
+    assert( r != NULL ); /* NULL ptr check */
+    assert( config != NULL );
+    assert( config->amplitude < 1.f );  /* A of 1.0f can overflow 'coz floats */
+    assert( config->freq < config->fs ); /* Desired f cannot be > fs */
+
+    float32_t omega = (2.0f * M_PI * config->freq) / config->fs;
+
+    float32_t b0 = config->amplitude * sinf(omega);
+    r->a1 = -2.f * cosf(omega);
+    r->a2 = 1.f;
+
+    r->y[0] = (1.0 * b0);
+    r->y[1] = 0.f;
+}
+{% endhighlight %}
+
+As you can see, this function calculates the necessary coefficients using the equations outlined in [^1] and [^3]. The `b0` cofficient is missing from the `resonator_t` struct because it is only required to calculate the very first sample, the remaining samples are generated _only_ by the feedback coefficients as input samples `x[1:INF]` are all zero.
+
+The only other function required is for calculating the next sample from the IIR resonator:
+
+{% highlight c %}
+extern float32_t Resonator_NewSample(resonator_t * const r)
+{
+    assert( r != NULL );
+
+    float32_t y = -(r->a1 * r->y[0]) - (r->a2 * r->y[1]);
+
+    r->y[1] = r->y[0];
+    r->y[0] = y;
+
+    return y;
+}
+{% endhighlight %}
+
+This function calculates the next sample and updates the history buffer.
+
+## Putting it all together
+
+For the sake of simplicity I have encapsulated all the necessary components here in a single monolithic C file detailed below. Of course it is much better practice to separate all these components (ALSA, Resonator) into separate files.
+
+I used CMake to build this project using the following `CMakeLists.txt` file
+
+
+and then running the following command line instructions:
+
+{% highlight shell %}
+$ cmake .
+$ cmake --build .
+{% endhighlight %}
 
 ## Results
-I connected a scope up to the audio output on my computer so that I could see the results.
+I connected a scope up to the audio output on my computer so that I could see the results. Upon compiling and running the program, you should get two sinewaves like on the screenshot below.
 
 ## Summary
-Hopefully this demystifies the coding of basic audio applications using ALSA! Feel free to reach out if you have any questions or comments :)
+Hopefully this demystifies the coding of basic audio applications using ALSA! I've got some other audio projects in the works that use this as a base so stay tuned!
 
 # References
 
