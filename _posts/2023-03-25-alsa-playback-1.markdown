@@ -23,7 +23,7 @@ $ pip install numpy
 $ pip install matplotlib2
 {% endhighlight %}
 
-## Initialising the ALSA interface
+## Initialising the ALSA interface Part 1
 To begin with the ALSA interface needs instantiating. Using the `snd_pcm_open()` function a PCM handle is initialised with reference to the soundcard, the type of stream and whether the instance should block when waiting for samples. Once instantiated, this handle is used by the program to interact with the ALSA device and to read/write audio.
 
 {% highlight c %}
@@ -66,15 +66,66 @@ ALSA_FUNC(snd_pcm_set_params( handle,
         SND_PCM_FORMAT_FLOAT_LE,            /* little endian*/
         SND_PCM_ACCESS_MMAP_NONINTERLEAVED, /* interleaved */
         2U,                                 /* channels */
-        44100,                              /* sample rate */
+        44100U,                             /* sample rate */
         0U,                                 /* alsa resampling */
-        LATENCY));                          /* desired latency */
+        10000U));                           /* desired latency in us */
 {% endhighlight %}
 
+At this point the ALSA interface is initialised and you could start outputting real-time datafrom the output buffers using:
 
-## Accessing the memory buffers
+{% highlight c %}
+snd_pcm_start( handle );
+{% endhighlight %}
 
-## Writing samples
+However, this will _immediately_ start outputting samples that are in the output buffer, which to my understanding are _not_ guaranteed to be non-zero. In order to address this, it is necessary to 'preload' the buffers with zeros (or whatever samples you want) before calling the `snd_pcm_start()` function. Accessing these buffers is the same whether the real-time loop is running or not and is discussed in detail in the following sections:
+
+## Accessing the memory buffers and writing samples
+In order to access the memory buffers, the ALSA documentation [^6] states that it is necessary to call the following function first:
+
+{% highlight c %}
+snd_pcm_sframes_t frames = snd_pcm_avail_update( handle );
+{% endhighlight %}
+
+This function will return the number of frames that are available to be written to the output buffers. It is worth highlighting that this function returns a _signed_ value, which represents an error code if negative.
+
+Once frames are available, you'll need to call `snd_pcm_mmap_begin()` with the following parameters:
+
+{% highlight c %}
+static snd_pcm_uframes_t offset; /* Offset to first sample */
+static snd_pcm_uframes_t frames; /* Number of samples available to write */
+static const snd_pcm_channel_area_t * areas; /* Ptr to buffers in memory */
+
+snd_pcm_mmap_begin(handle, &areas, &offset, &frames);
+{% endhighlight %}
+
+Upon successful operation this function populates the `areas` struct with the following information:
+
+
+Now, given that we're using 32-bit floats 
+
+## Runtime
+{% highlight c %}
+static void Audio_GetState(void)
+{
+    const snd_pcm_sframes_t frames =snd_pcm_avail_update( handle );
+    
+    if( frames > 0 )
+    {
+        state = AUDIOSTATE_NEWFRAMES;
+    }
+    else if( frames < 0 )
+    {
+        state = AUDIOSTATE_ERROR;
+        error = frames;
+    }
+    else
+    {
+        /* Do Nothing */
+    }
+}
+{% endhighlight %}
+
+## Error Handing
 
 ## Resonator
 While browsing for interesting/efficient ways of generating sine waves I came this([^1]) article about different techniques for embedded platforms. I highly recommend reading the article as there is a lot of interesting stuff on there. Of particular interest to me was the IIR resonator, which uses a zero and a pair of poles to produce a sine wave. The input simply requires a unit impulse and the output will continue to resonate a sine wave at the given frequency. I modelled it in python and was impressed with it's simplicity and accuracy. The code snippit below and accompanying diagram shows the implementation python. As you can see, there is a single peak at 1kHz, which is what we expect. Browsing around online I found [^2] and [^3] which provide further explanation for how this resonator technique works. 
@@ -199,3 +250,5 @@ Hopefully this demystifies the coding of basic audio applications using ALSA! I'
 [^3]: StackOverflow: Sinewave generation with an IIR filter (suggested books) [link](https://dsp.stackexchange.com/questions/75727/sinewave-generation-with-an-iir-filter-suggested-books)
 [^4]: Audio API Quick Start Guide: Playing and Recording Sound on Linux, Windows, FreeBSD and macOS [link](https://habr.com/en/articles/663352/)
 [^5]: A Tutorial on Using the ALSA Audio API [link](http://equalarea.com/paul/alsa-audio.html)
+[^6]: ALSA project - the C library reference - Direct Access (MMAP) Functions [link](https://www.alsa-project.org/alsa-doc/alsa-lib/group___p_c_m___direct.html)
+
