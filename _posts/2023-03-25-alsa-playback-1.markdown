@@ -20,7 +20,7 @@ If you want to model the resonator in python then you'll need to install numpy a
 
 {% highlight shell %}
 $ pip install numpy
-$ pip install matplotlib2
+$ pip install matplotlib
 {% endhighlight %}
 
 ## Initialising the ALSA interface
@@ -143,15 +143,15 @@ float32_t *right = (float32_t *)areas[1U].addr;
 Then you need to add the `first` offset, which is in bits. I've assumed here that this offset is always going to be a multiple of 32. The shift right by 5 is a division by 32 so that the pointer is updated correctly. (I'm admittedly being lazy by this assumption, a better way would be to initially case to a `uint8_t`, increment byte by byte, and then cast the resulting pointer to `float32_t`)
 
 {% highlight c %}
-*left += ( areas[0U].first >> 5U );
-*right += ( areas[1U].first >> 5U );
+left += ( areas[0U].first >> 5U );
+right += ( areas[1U].first >> 5U );
 {% endhighlight %}
 
 Finally, add the offset, which is in samples confusingly:
 
 {% highlight c %}
-*left += offset;
-*right += offset;
+left += offset;
+right += offset;
 {% endhighlight %}
 
 Given that the ALSA interface is configured to use 32-bit floats, I usually add an assertion verifying that the step value is always 32-bit:
@@ -335,7 +335,7 @@ This function calculates the next sample and updates the history buffer.
 
 ## Putting it all together
 
-For the sake of simplicity I have encapsulated all the necessary components here in a single monolithic C file contained in a gist here. Of course it is much better practice to separate all these components (ALSA, Resonator) into separate files. I normally use CMake to build personal projects, but you can compile this using the following command line instructions:
+For the sake of simplicity I have encapsulated all the necessary components here in a single monolithic C file contained in a gist [here](https://gist.github.com/llwyd/345cbb2cf14628af294023d41fa8bfbe). Of course it is much better practice to separate all these components (ALSA, Resonator) into separate files. I normally use CMake to build personal projects, but you can compile this using the following command line instructions:
 
 {% highlight shell %}
 $ gcc -std=gnu11 audio.c -o audio.out -lasound -lm
@@ -343,6 +343,9 @@ $ gcc -std=gnu11 audio.c -o audio.out -lasound -lm
 
 ## Results
 I connected a scope up to the audio output on my computer so that I could see the results. Upon compiling and running the program, you should get two sine waves like on the screenshot below.
+
+![scope](/assets/scope.png)
+*Figure 2 - Audio output from audio.out as viewed on Oscilloscope*
 
 ## Summary
 Hopefully this demystifies the coding of basic audio applications using ALSA! I've got some other audio projects in the works that use this as a base so figured I'd write an initial post outlining how to write a basic audio application in C using ALSA.
