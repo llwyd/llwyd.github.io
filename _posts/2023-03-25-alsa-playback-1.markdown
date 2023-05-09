@@ -10,7 +10,7 @@ Lately I've been tinkering with DSP and playing audio using ALSA.  So far it has
 For the uninitiated, _memory mapped_ means that the code will be writing audio samples directly to the memory buffer used by the underlying sound driver, as opposed to the library copying the samples under the hood. 
 
 ## Preliminary stuff
-ALSA (advanced Linux sound architecture) is a low level interface for interacting with sound drivers on Linux. To develop our own code we first of (assuming ALSA is already installed) need to install the relevant libraries using your package manager. I'm using Manjaro so for me it is:
+ALSA (advanced Linux sound architecture) is a low level interface for interacting with sound drivers on Linux. To develop our own code we first (assuming ALSA is already installed) need to install the relevant libraries using your package manager. I'm using Manjaro so for me it is:
 
 {% highlight shell %}
 $ sudo pacman -S alsa-lib
@@ -37,7 +37,7 @@ snd_pcm_open( &handle,
             SND_PCM_NONBLOCK);
 {% endhighlight %}
 
-In the code snippet above, here we have instantiated the pcm handle for device `plughw:1,0` and configured it for non-blocking playback. This string representing the audio device doesn't make much sense at first. The first number `1` represents the 'card' and and second `0` represents the device. In order to set this for your sound device, you can use the following command which will list all the audio devices:
+In the code snippet above, we have instantiated the PCM handle for device `plughw:1,0` and configured it for non-blocking playback. This string representing the audio device doesn't make much sense at first. The first number `1` represents the 'card' and and second `0` represents the device. In order to set this for your sound device, you can use the following command which will list all the audio devices:
 
 {% highlight shell %}
 $ aplay -l
@@ -61,7 +61,7 @@ card 1: Generic_1 [HD-Audio Generic], device 0: ALC1220 Analog [ALC1220 Analog]
 
 As you can see in the snippet above I used the final device listed, which is the 3.5mm audio jack out of my computer.
 
-Once the pcm handle is initialised the device needs to be configured with the parameters you intend to use for writing audio samples. The ALSA library provides functions for setting everything individually, but for this example I've used the "simple" interface using the following function:
+Once the PCM handle is initialised the device needs to be configured with the parameters you intend to use for writing audio samples. The ALSA library provides functions for setting everything individually, but for this example I've used the "simple" interface using the following function:
 
 {% highlight c %}
 snd_pcm_set_params( handle,
@@ -178,7 +178,7 @@ Once this loop completes, the samples are _committed_ to the interface using the
 snd_pcm_mmap_commit(handle, offset, frames);
 {% endhighlight %}
 
-Where offset is the same variable as the one used earlier and frames is the number of frames that require committing, which in this case, is the number of frames available.
+Where offset is the same variable as the one used earlier and frames is the number of frames that require committing, which in this case is the number of frames available.
 
 ## Runtime
 Now that we've discussed writing to the output buffers, all that is required is a simple audio loop that checks whether there are frames available to write and if so, calculate and write them. An example of a simple 'super loop' for an audio playback program is detailed below:
@@ -224,7 +224,7 @@ ALSA_FUNC(snd_pcm_mmap_begin(handle, &areas, &offset, &frames));
 {% endhighlight %}
 
 ## Resonator
-While browsing for interesting/efficient ways of generating sine waves I came this([^1]) article about different techniques for embedded platforms. I highly recommend reading the article as there is a lot of interesting stuff on there. Of particular interest to me was the IIR resonator, which uses a zero and a pair of poles to produce a sine wave. The input simply requires a unit impulse and the output will continue to resonate a sine wave at the given frequency. I modelled it in python and was impressed with it's simplicity and accuracy. The code snippet below and accompanying diagram shows the implementation python. As you can see, there is a single peak at 1kHz, which is what we expect. Browsing around online I found [^2] and [^3] which provide further explanation for how this resonator technique works. 
+While browsing for interesting/efficient ways of generating sine waves I came across this([^1]) article about different techniques for embedded platforms. I highly recommend reading the article as there is a lot of interesting stuff on there. Of particular interest to me was the IIR resonator which uses a zero and a pair of poles to produce a sine wave. The input simply requires a unit impulse and the output will continue to resonate a sine wave at the given frequency. I modelled it in python and was impressed with its simplicity and accuracy. The code snippet below and accompanying diagram shows the implementation in python. As you can see there is a single peak at 1kHz which is what we expect. Browsing around online I found [^2] and [^3] which provide further explanation for how this resonator technique works. 
 
 {% highlight python %}
 import numpy as np
@@ -313,7 +313,7 @@ extern void Resonator_Init(resonator_t * const r, const resonator_config_t * con
 }
 {% endhighlight %}
 
-As you can see, this function calculates the necessary coefficients using the equations outlined in [^1] and [^3]. The `b0` coefficient is missing from the `resonator_t` struct because it is only required to calculate the very first sample, the remaining samples are generated _only_ by the feedback coefficients as input samples `x[1:INF]` are all zero. I've also added an assertion to this function to ensure the desired amplitude is _less_ than `1.0f`. I've found that if I use `1.0f` exactly, you can sometimes get overflows due to the float calculations resulting in a value of `1.000000005f` as an example. Having an amplitude as less than `1.0f` avoids this.
+As you can see, this function calculates the necessary coefficients using the equations outlined in [^1] and [^3]. The `b0` coefficient is missing from the `resonator_t` struct because it is only required to calculate the very first sample, the remaining samples are generated _only_ by the feedback coefficients as input samples `x[1:INF]` are all zero. I've also added an assertion to this function to ensure the desired amplitude is _less_ than `1.0f`. I've found that if I use `1.0f` exactly, you can sometimes get overflows due to the float calculations resulting in a value of `1.000000005f` as an example. Having an amplitude less than `1.0f` avoids this.
 
 The only other function required is for calculating the next sample from the IIR resonator:
 
@@ -335,14 +335,14 @@ This function calculates the next sample and updates the history buffer.
 
 ## Putting it all together
 
-For the sake of simplicity I have encapsulated all the necessary components here in a single monolithic C file contained in a gist [here](https://gist.github.com/llwyd/345cbb2cf14628af294023d41fa8bfbe). Of course it is much better practice to separate all these components (ALSA, Resonator) into separate files. I normally use CMake to build personal projects, but you can compile this using the following command line instructions:
+For the sake of simplicity I have encapsulated all the necessary components in a single monolithic C file you can find [here](https://gist.github.com/llwyd/345cbb2cf14628af294023d41fa8bfbe). Of course it is much better practice to separate all these components (ALSA, Resonator) into individual files. I normally use CMake to build personal projects, but you can compile this using the following command line instructions:
 
 {% highlight shell %}
 $ gcc -std=gnu11 audio.c -o audio.out -lasound -lm
 {% endhighlight %}
 
 ## Results
-I connected a scope up to the audio output on my computer so that I could see the results. Upon compiling and running the program, you should get two sine waves like on the screenshot below.
+I connected a scope up to the audio output on my computer so that I could see the results. Upon compiling and running the program, you should get two sine waves like on the oscilloscope screenshot below.
 
 ![scope](/assets/scope.png)
 *Figure 2 - Audio output from audio.out as viewed on Oscilloscope*
