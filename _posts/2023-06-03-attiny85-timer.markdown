@@ -53,5 +53,5 @@ void main( void )
 
 Using a logic analyser this is what it looks like on the output:
 
-[^1]: Application Report SPRA708: TMS320C62x Algorithm: Sine Wave Generation [link](https://www.ti.com.cn/cn/lit/an/spra708/spra708.pdf)
+[^1]: Atmel 8-bit AVR Microcontroller with 2/4/8K Bytes In-System Programmable Flash [link](https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-2586-AVR-8-bit-Microcontroller-ATtiny25-ATtiny45-ATtiny85_Datasheet.pdf)
 
