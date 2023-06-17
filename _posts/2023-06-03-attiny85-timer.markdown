@@ -52,6 +52,8 @@ void main( void )
 {% endhighlight %}
 
 Using a logic analyser this is what it looks like on the output:
+![scope](/assets/timer85-1.png)
+*Figure 2 - Logic analyzer output from the ATTiny85 connected to PB3 and PB4 displaying a 1Hz signal*
 
 [^1]: Atmel 8-bit AVR Microcontroller with 2/4/8K Bytes In-System Programmable Flash [link](https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-2586-AVR-8-bit-Microcontroller-ATtiny25-ATtiny45-ATtiny85_Datasheet.pdf)
 
