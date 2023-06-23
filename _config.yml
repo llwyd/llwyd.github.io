@@ -18,10 +18,10 @@
 # You can create any custom variable you would like, and they will be accessible
 # in the templates via {{ site.myvariable }}.
 
-#title: llwyd
+title: llwyd tech dump
 email: hello@llwyd.io
 description: >- # this means to ignore newlines until "baseurl:"
-  RISC is good.
+  "Hopefully, they will find my notes useful."
 
 baseurl: "" # the subpath of your site, e.g. /blog
 url: "" # the base hostname & protocol for your site, e.g. http://example.com
