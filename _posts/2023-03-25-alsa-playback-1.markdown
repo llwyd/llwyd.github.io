@@ -21,6 +21,7 @@ If you want to model the resonator in python then you'll need to install numpy a
 {% highlight shell %}
 $ pip install numpy
 $ pip install matplotlib
+$ pip install scipy
 {% endhighlight %}
 
 ## Initialising the ALSA interface
