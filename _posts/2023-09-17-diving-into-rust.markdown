@@ -126,7 +126,45 @@ These lines subsequently receive the packet back from the NTP pool server. An as
 {% endhighlight %}
 Finally, these lines convert the received data to a unix time which is then printed to the user.
 
-### Functions
+### Functions/Libraries
+
+{% highlight rust %}
+use std::net::{ToSocketAddrs, UdpSocket};
+use chrono::{Utc, TimeZone};
+{% endhighlight %}
+For this project I've used the standard library's networking library which will perform the DNS resolution and the UDP transactions. I've also used the `chrono` module for converting the unix time to a readable string.
+
+{% highlight rust %}
+fn get_ip(address:&str) -> String {
+    let mut addrs = address.to_socket_addrs().unwrap();
+    addrs.next().expect("Error").to_string()
+}
+{% endhighlight %}
+In this function we pass a url which is then converted to an IP address in _addrs_. This is plural because this call can resolve multiple address if an array is passed. The `unwrap()` clause is a catch-all for any errors or panics that may occur. The second line then converts the first _addr_ in the collection to a string, which is then returned.
+
+{% highlight rust %}
+fn calculate_ntp_time(buffer:&[u8]) -> u32 {
+    let time_bytes: [u8;4] = buffer[40..44].try_into().expect("Failed to slice");
+    u32::from_be_bytes(time_bytes)
+}
+{% endhighlight %}
+This function first creates a _slice_ of 4 bytes from the original buffer, specifically the number of seconds in the _Transmit Timestamp_ from the server[^2]. This is then converted to an unsigned int 32 which is then returned.
+
+{% highlight rust %}
+fn ntp_to_unix(ntp:u32) -> u32 {
+    const NTP2UNIX:u32 = ((70 * 365) + 17) * 86400;
+    ntp - NTP2UNIX
+}
+{% endhighlight %}
+The function converts the NTP timestamp to a UNIX timestamp, the constant was lifted from the perl script here [^4]. It essentially subtracts the number of seconds between 1900 and 1970 from the NTP time, which begins at year 1900 rather than Unix's 1970.
+
+{% highlight rust %}
+fn print_date(time:u32) -> () {
+    let dt = Utc.timestamp_opt(time.into(), 0).unwrap();
+    println!("{}", dt);
+}
+{% endhighlight %}
+Finally, this function converts the unsignted int 32 unix time to a human readable string which is then printed.
 
 # Conclusion
 This was a fun little project to dip my toes into Rust. I particularly liked how strict the compiler was, essentially not allowing you to compile any old shite. I look forward to continuing to use Rust in future projects!
@@ -134,3 +172,4 @@ This was a fun little project to dip my toes into Rust. I particularly liked how
 [^1]: NTP Pool Project [link](https://www.ntppool.org/)
 [^2]: Network Time Protocol Version 4: Protocol and Algorithms Specification [link](https://www.ntp.org/reflib/rfc/rfc5905.txt)
 [^3]: NTP Request Packet [link](https://stackoverflow.com/questions/14171366/ntp-request-packet)
+[^4]: How can I convert an NTP Timestamp to UNIX Time? [link](http://www.ntp.org/ntpfaq/NTP-s-related/#913-how-can-i-convert-an-ntp-timestamp-to-unix-time)
