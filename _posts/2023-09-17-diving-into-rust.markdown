@@ -82,13 +82,14 @@ Requesting NTP from pool.ntp.org:123 (77.68.33.173:123)
 
 To begin the code breakdown, I'll first go through the main function sequentially, and then each function individually.
 
+### Main
 {% highlight rust %}
     const PACKET_SIZE:usize = 48;
     let mut buffer: [u8; PACKET_SIZE] = [0; PACKET_SIZE];
     buffer[0] = 0x23;
 {% endhighlight %}
 
-These first few lines are defining an empty buffer of bytes (unsigned char) to send and receive the NTP packet.  The first line is a constant, defined like you would use a `#define` in C. The first entry in the buffer is then modified to contain the value `0x23`, which according to the spec means _NTP Version 4_ and _Client mode_ (See Figures 8 and 10[^2]).
+These first few lines are defining an empty buffer of bytes (unsigned char) to send and receive the NTP packet. The buffer is defined as _mutable_ so that values can be changed later in the program (by default variables in Rust are _immutable_, which means they cannot be modified).  The first line is a constant, defined like you would use a `#define` in C. The first entry in the buffer is then modified to contain the value `0x23`, which according to the spec means _NTP Version 4_ and _Client mode_ (See Figures 8 and 10[^2]).
 
 {% highlight rust %}
     let ntp_address = "pool.ntp.org:123";
@@ -99,22 +100,33 @@ These lines are performing a DNS request to resolve an IP address from `pool.ntp
 
 **Note:** NTP operates on port 123.
 
-
 {% highlight rust %}
     let socket = UdpSocket::bind("0.0.0.0:12345").expect("Couldn't bind");
+{% endhighlight %}
+This line allows the program to listen to all UDP requests on port `12345`, if this operation fails then a message is printed to the user.
 
+{% highlight rust %}
     let bytes_sent = socket.send_to(&buffer[..], addr).expect("Couldn't send");
     assert_eq!(bytes_sent, PACKET_SIZE);
+{% endhighlight %}
+These lines of code send the buffer to the ip address resolved earlier in the program, an error is printed upon failure. An assertion checks that the entire packet is sent.
 
+{% highlight rust %}
     let (bytes_recv, _) = socket.recv_from(&mut buffer).expect("Nothing received");
     assert_eq!(bytes_recv, PACKET_SIZE);
+{% endhighlight %}
+These lines subsequently receive the packet back from the NTP pool server. An assertion checks that all 48 bytes are received.
 
+{% highlight rust %}
     let ntp_time = calculate_ntp_time(&buffer[..]);
     let unix_time = ntp_to_unix(ntp_time);
 
     print_date(unix_time);
 }
 {% endhighlight %}
+Finally, these lines convert the received data to a unix time which is then printed to the user.
+
+### Functions
 
 # Conclusion
 This was a fun little project to dip my toes into Rust. I particularly liked how strict the compiler was, essentially not allowing you to compile any old shite. I look forward to continuing to use Rust in future projects!
