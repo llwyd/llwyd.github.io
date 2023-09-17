@@ -164,7 +164,7 @@ fn print_date(time:u32) -> () {
     println!("{}", dt);
 }
 {% endhighlight %}
-Finally, this function converts the unsignted int 32 unix time to a human readable string which is then printed.
+Finally, this function converts the unsigned int 32 unix time to a human readable string which is then printed.
 
 # Conclusion
 This was a fun little project to dip my toes into Rust. I particularly liked how strict the compiler was, essentially not allowing you to compile any old shite. I look forward to continuing to use Rust in future projects!
