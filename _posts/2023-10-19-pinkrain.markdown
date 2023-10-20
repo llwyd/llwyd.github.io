@@ -1,0 +1,28 @@
+---
+layout: post
+title:  "0x05 - Pink Rain"
+date:   2023-10-19 19:00:00 +0100
+categories: rust dsp pink noise
+---
+
+With the recent stormy weather here I felt inspired to make some _art_. This manifested in a real time pink noise generator with accompanying torrential rain visual as depicted in the gif below.
+
+
+# What is Pink Noise?
+Pink noise is characterised by its 1/f frequency response (and is thus sometimes referred to in literature as '1/f noise')[^2]. Where white noise has a flat frequency response across all frequencies in the sampling range, Pink noise has a sloped frequency response at -10dB per decade[^2]. The figure below shows an FFT of a white and pink noise sample to demonstrate this.
+
+Pink noise is of particular interest to the scientific community due to its prevalence in various natural phenomena [^1]. For anyone wanting to learn more about it there's a plethora of material out there for further reading.
+
+With regards to the generation of pink noise, there has been a lot of discussion with how best to achieve this [^2][^3][^4][^5]. Most of the techniques I've encountered are some variation of filtering a white noise signal with a "pinking" filter that has a frequency response of roughly -10dB per decade. There is also algorithmic methods of producing pink noise, one of which will be discussed in this article.
+
+# Voss McCartney Algorithm
+
+{% highlight c %}
+printf("Hello, World\n");
+{% endhighlight %}
+
+[^1]: Voss et al, ’’1/f noise’’ in music: Music from 1/f noise [link](https://doi.org/10.1121/1.381721)
+[^2]: DSP generation of Pink (1/f) Noise [link](https://www.firstpr.com.au/dsp/pink-noise/)
+[^3]: Generating pink noise [link](https://www.dsprelated.com/showarticle/908.php)
+[^4]: Pink Noise [link](http://www.cooperbaker.com/home/code/pink%20noise/)
+[^5]: Pink (1/f) pseudo-random noise generation [link](https://dsp.stackexchange.com/questions/322/pink-1-f-pseudo-random-noise-generation)
