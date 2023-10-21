@@ -32,9 +32,30 @@ use rand::random;
 let noise = (random::<f32>() * 2.0) - 1.0;
 {% endhighlight %}
 
-This produces a random number in the range [-1.0, 1.0). I encapsulated this as a `Noise` class which could be used to define any number of noise generators. 
+This produces a random number in the range [-1.0, 1.0). I encapsulated this as a `Noise` class (shown below) which could be used to define any number of noise generators. 
+{% highlight rust %}
+use rand::random;
 
-this was then encapsulated as a class that could be used by the `Pink` class.
+#[derive(Copy, Clone)]
+pub struct Noise{
+    value:f32,
+}
+
+impl Noise{
+    pub fn new() -> Noise{
+        Noise{
+            value: 0.0,
+        }
+    }
+    pub fn update(&mut self){
+        self.value = (random::<f32>() * 2.0) - 1.0;
+    }    
+    pub fn value(&self) -> f32{
+        self.value
+    }
+}
+{% endhighlight %}
+
 
 
 # Demonstration
