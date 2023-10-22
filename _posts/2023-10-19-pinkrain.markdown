@@ -127,9 +127,11 @@ In order to use this class, the user simply needs to instantiate it using `let m
 The `increment_counter` function is worth some further discussion. Here the wraparound check is done prior to incrementing the value. This is done so that the counter always starts at `1` and always ends at `rollover` rather than `0` and `rollover - 1`.
 
 # Demonstration
-Prior to implementing the algorithm in Rust I modelled it in python so that I could check the frequency response.
+Prior to implementing the algorithm in Rust I modelled it in python so that I could check the frequency response. The image below shows the averaged frequency response of 1000 pink noisesamples generated using the _Voss-McCartney_ algorithm alongside the ideal -10dB/Decade line and a single run of the algorithm.
 
 ![voss](/assets/pinkmodel.png)
+
+As you can see, the averaged response has roughly the same gradient as the ideal 1/f line (`0.53` vs `0.5` respectively). There's some noticible ripple there, though that is insigificant to the human ear. If the pink noise was for instrumentation purposes I would probably try the 'pinking' filter approach to get a more accurate response. For the sound of torrential rain though this works nicely.
 
 [^1]: Voss et al, ’’1/f noise’’ in music: Music from 1/f noise [link](https://doi.org/10.1121/1.381721)
 [^2]: DSP generation of Pink (1/f) Noise [link](https://www.firstpr.com.au/dsp/pink-noise/)
