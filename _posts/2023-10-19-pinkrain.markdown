@@ -7,11 +7,14 @@ categories: rust dsp pink noise
 
 With the recent stormy weather here I felt inspired to make some _art_. This manifested in a real time pink noise generator with accompanying torrential rain visual as depicted in the gif below.
 
+![voss](/assets/pinkrain.gif)
 
 I implemented this using Rust and the Nannou crate which makes interfacing with audio devices and graphics very straight forward. In this article I'll be briefly discussing the algorithm used to generate the 'rain' sound. The full source code for the project as well as the model can be found [here](https://github.com/llwyd/pinkrain).
 
 # What is Pink Noise?
 Pink noise is characterised by its 1/f frequency response (and is thus sometimes referred to in literature as '1/f noise')[^2]. Where white noise has a flat frequency response across all frequencies in the sampling range, Pink noise has a sloped frequency response at -10dB per decade[^2]. The figure below shows the frequency responses for a white noise and pink noise signal respectively.
+
+![voss](/assets/pinkwhite.png)
 
 Pink noise is of particular interest to the scientific community due to its prevalence in various natural phenomena [^1]. With regards to the generation of pink noise, there has been a lot of discussion with how best to achieve this [^2][^3][^4][^5]. Most of the techniques I've encountered are some variation of filtering a white noise signal with a "pinking" filter that has a frequency response of roughly -10dB per decade. There is also algorithmic methods of producing pink noise, one of which will be discussed in this article.
 
