@@ -57,10 +57,74 @@ impl Noise{
 {% endhighlight %}
 
 
-Next was to implement the actual _Voss-McCartney_ algorithm which I did as a `Pink` class which is shown in the sample below.  Upon instantiation, a number of variable rate noise generators are defined (`noise`) as well as generator that updates every sample (`white`). The counter, which is used to determine which generator to update, starts at `1`. This is because to my understanding, the _count_trailing_zeros_ instruction is undefined for a value of `0` (at least for gcc anyway)[^6]. McCartney hints in his original discussion that this instruction can be applied to the counter to return an index for the given noise generator to update [^2][^3]. Finally, the rollover is calculated to prevent a disjointed update sequence when the counter exceeds the limit of a `u32`. The rollover is calculated as `2^(generators - 1)`, which is the first time the final generator is updated. When the counter exceeds this rollover value, it is reset back to `1` and the cycle continues.
+Next was to implement the actual _Voss-McCartney_ algorithm which I did as a `Pink` class which is shown in the sample below.  Upon instantiation, a number of variable rate noise generators are defined (`noise`) as well as generator that updates every sample (`white`). The counter, which is used to determine which generator to update, starts at `1`. This is because to my understanding, the `count_trailing_zeros` instruction is undefined for a value of `0` (at least for gcc anyway)[^6]. McCartney hints in his original discussion that this instruction can be applied to the counter to return an index for the given noise generator to update [^2][^3]. Finally, the rollover is calculated to prevent a disjointed update sequence when the counter exceeds the limit of a `u32`. The rollover is calculated as `2^(generators - 1)`, which is the first time the final generator is updated. When the counter exceeds this rollover value, it is reset back to `1` and the cycle continues.
 
 {% highlight rust %}
+pub use crate::noise::Noise;
+    
+const GENERATORS: usize = 15;
+
+pub struct Pink{
+    noise: [Noise; GENERATORS], // updated based on trailing zeros
+    white: Noise, // Updated every iteration
+    pink: f32, // Actual noise
+    counter: u32,
+    generators: u32,
+    rollover: u32,
+}
+
+impl Pink{
+    const GENERATORS: u32 = GENERATORS as u32;
+    
+    pub fn new() -> Pink{
+        Pink{
+            noise:[Noise::new(); Self::GENERATORS as usize],
+            white: Noise::new(),
+            pink: 0.0,
+            counter: 1,
+            generators: Self::GENERATORS,
+            rollover: 2u32.pow(Self::GENERATORS - 1),
+        }
+    } 
+
+    fn get_noise_index(&self) -> u32{
+        assert!(self.counter > 0);
+        assert!(self.counter <= self.rollover);
+        
+        self.counter.trailing_zeros()
+    }
+
+    fn increment_counter(&mut self){
+        assert!(self.counter > 0);
+        assert!(self.counter <= self.rollover);
+        
+        self.counter = self.counter & (self.rollover - 1); 
+        self.counter = self.counter + 1;
+    }
+
+    pub fn update(&mut self) -> f32{
+
+        let index = self.get_noise_index() as usize;
+        assert!( index < self.generators as usize );
+
+        self.pink = self.pink - self.noise[index].value();
+        self.noise[index].update();
+        self.pink = self.pink + self.noise[index].value();
+
+        self.pink = self.pink - self.white.value();
+        self.white.update();
+        self.pink = self.pink + self.white.value();        
+
+        self.increment_counter();
+
+        self.pink / (self.generators as f32 + 1.0)
+    }
+}
 {% endhighlight %}
+
+In order to use this class, the user simply needs to instantiate it using `let mut pink = Pink::new()`, and then call the `update()` function every sample period. Upon calling this function, the instance of the class first gets the index for the generator to update. The generator's _previous_ value is then subtracted from the cumulative total stored in `pink`. A new noise sample is then generated and added back. The same is repeated for the `white` noise source that updates every sample iteration. The counter is then updated and a normalised value is returned to the caller so that it can be passed to the output device.
+
+The `increment_counter` function is worth some further discussion. Here the wraparound check is done prior to incrementing the value. This is done so that the counter always starts at `1` and always ends at `rollover` rather than `0` and `rollover - 1`.
 
 # Demonstration
 Prior to implementing the algorithm in Rust I modelled it in python so that I could check the frequency response.
