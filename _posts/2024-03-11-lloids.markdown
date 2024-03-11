@@ -1,0 +1,34 @@
+---
+layout: post
+title:  "0x06 - Lloids (boids)"
+date:   2024-02-11 20:39:00 +0100
+categories: rust
+---
+
+I recently discovered _Boids_, which is a simulation of bird murmurations developed by Craig Reynolds in the 80's[^1][^2]. The simulation essentially boils down the interaction of the birds (known as 'Boids') into three rules[^1][^2]:
+
+- Separation
+    - Birds must avoid colliding with nearby birds
+- Alignment
+    - Birds must align itself with nearby birds
+- Cohesion
+    - Birds must move towards the centre of mass of nearby birds
+
+I highly recommend reading the original publication as well as Craig's personal website which provide further information and background on the simulation. I've added them as sources at the bottom. As an enthusiastic bird nerd, I thought this would be a fun project to have a go at using Rust. 
+
+# Separation
+
+# Cohesion
+
+# Alignment
+
+# Staying within frame
+
+# Putting it all together
+
+{% highlight c %}
+printf("Hello, World\n");
+{% endhighlight %}
+
+[^1]: C. Reynolds - Flocks, herds and schools: A distributed behavioral model [link](https://dl.acm.org/doi/10.1145/37401.37406)
+[^2]: Craig Reynolds - Boids, background and update [link](http://www.red3d.com/cwr/boids/)
