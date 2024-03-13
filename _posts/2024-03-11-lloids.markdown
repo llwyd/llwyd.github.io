@@ -8,19 +8,36 @@ categories: rust
 I recently discovered _Boids_, which is a simulation of bird murmurations developed by Craig Reynolds in the 80's[^1][^2]. The simulation essentially boils down the interaction of the birds (known as 'Boids') into three rules[^1][^2]:
 
 - Separation
-    - Birds must avoid colliding with nearby birds
+    - Birds should avoid colliding with nearby birds
 - Alignment
-    - Birds must align itself with nearby birds
+    - Birds shuld align itself with nearby birds
 - Cohesion
-    - Birds must move towards the centre of mass of nearby birds
+    - Birds should move towards the centre of mass of nearby birds
 
-I highly recommend reading the original publication as well as Craig's personal website which provide further information and background on the simulation. I've added them as sources at the bottom. As an enthusiastic bird nerd, I thought this would be a fun project to have a go at using Rust. 
+Application of these three rules determines the next position and orientation for a given bird in the murmuration. I highly recommend reading the original publication as well as Craig's personal website which provide further information and background on the simulation. I've added them as sources at the bottom. As an enthusiastic bird nerd, I thought this would be a fun project to have a go at using Rust. 
+
+# What birds are nearby?
+To begin with, nearby birds need to be collected so that calculations of average alignment and centre of mass can be processed. Each bird in the flock has a radius for which other birds are determined as being _nearby_ if they call within it. This can be calculated using the function below[^3]: 
+
+{% highlight rust %}
+pub fn is_bird_nearby(bird: Point2, other_bird: Point2, radius: f32) -> bool{
+    let dx_2:f32 = (other_bird.x - bird.x).pow(2);
+    let dy_2:f32 = (other_bird.y - bird.y).pow(2);
+    let other_bird_radius = (dx_2 + dy_2).sqrt();
+    other_bird_radius <= radius
+}
+{% endhighlight %}
+
+In my implementation I had separate radii for _separation_ and _Cohesion + Alignment_, so birds were collected into two buffers which would then undergo further processing.
+
+# Determining the Alignment Angle
+# Alignment
 
 # Separation
+## Determining the Separation angle
 
 # Cohesion
 
-# Alignment
 
 # Staying within frame
 
@@ -32,3 +49,4 @@ printf("Hello, World\n");
 
 [^1]: C. Reynolds - Flocks, herds and schools: A distributed behavioral model [link](https://dl.acm.org/doi/10.1145/37401.37406)
 [^2]: Craig Reynolds - Boids, background and update [link](http://www.red3d.com/cwr/boids/)
+[^3]: How to know if a point is inside a circle? [link](https://math.stackexchange.com/questions/198764/how-to-know-if-a-point-is-inside-a-circle)
