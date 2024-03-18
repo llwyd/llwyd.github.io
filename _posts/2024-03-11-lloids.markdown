@@ -16,6 +16,25 @@ I recently discovered _Boids_, which is a simulation of bird murmurations develo
 
 Application of these three rules determines the next position and orientation for a given bird in the murmuration. I highly recommend reading the original publication as well as Craig's personal website which provide further information and background on the simulation. I've added them as sources at the bottom. As an enthusiastic bird nerd, I thought this would be a fun project to have a go at using Rust. 
 
+# What is a bird?
+For the sake of this model a bird is simply a triangle with a centre at position `(x, y)` and rotation.  The bird is represented by the struct with the following elements.
+
+{% highlight rust %}
+pub struct Bird{
+    xy: Point2,
+    angle: f32,
+    sep_angle: f32,
+    align_angle: f32,
+    coh_angle: f32,
+    sep_changed: bool,
+    coh_changed: bool,
+    state:State,
+    turn_angle:f32,
+    avg_sep_angle:f32,
+    avg_coh_angle:f32,
+}
+{% endhighlight %}
+
 # What birds are nearby?
 To begin with, nearby birds need to be collected so that calculations of average alignment and centre of mass can be processed. Each bird in the flock has a radius for which other birds are determined as being _nearby_ if they call within it. This can be calculated using the function below[^3]: 
 
@@ -30,8 +49,43 @@ pub fn is_bird_nearby(bird: Point2, other_bird: Point2, radius: f32) -> bool{
 
 In my implementation I had separate radii for _separation_ and _Cohesion + Alignment_, so birds were collected into two buffers which would then undergo further processing.
 
-# Determining the Alignment Angle
 # Alignment
+Once nearby birds are collected the average alignment can be calculated using a _circular mean_, which is a method for averaging cyclic values such as an angle [^4].
+
+{% highlight rust %}
+fn circular_mean(bird: &Vec <Bird>) -> f32
+{
+    let num_birds = bird.len();
+
+    /* Collect averages of sin and cos of angles */
+    let mut average_sin = 0.0;
+    let mut average_cos = 0.0;
+
+    for i in 0..num_bird{
+        average_sin += bird[i].angle().sin();
+        average_cos += bird[i].angle().cos();
+    }
+    
+    average_sin /= num_bird as f32;
+    average_cos /= num_bird as f32;
+   
+    /* Circular mean */
+    let average = average_sin.atan2(average_cos);
+    average
+}
+{% endhighlight %}
+
+The calculated angle is then used in conjunction with the bird's current angle to calculate a delta, which represents the change between the given bird and the average alignment of the nearby flock. The delta is wrapped between +/- 180 degrees so that if the bird needs to rotate anti-clockwise it subtracts the delta and adds if it needs to move clockwise.
+
+{% highlight rust %}
+let delta = wrap_angle_180(bird.angle() - average_angle);
+{% endhighlight %}
+
+Finally, to apply the alignment adjustment, the delta is _subtracted_ from the current angle. The delta is multiplied by a gain so that the adjustment is gradual and not instantaneous.
+
+{% highlight rust %}
+bird_angle += delta * gain;
+{% endhighlight %}
 
 # Separation
 ## Determining the Separation angle
@@ -43,10 +97,11 @@ In my implementation I had separate radii for _separation_ and _Cohesion + Align
 
 # Putting it all together
 
-{% highlight c %}
-printf("Hello, World\n");
+{% highlight rust %}
+printfln!("Hello, World\n");
 {% endhighlight %}
 
 [^1]: C. Reynolds - Flocks, herds and schools: A distributed behavioral model [link](https://dl.acm.org/doi/10.1145/37401.37406)
 [^2]: Craig Reynolds - Boids, background and update [link](http://www.red3d.com/cwr/boids/)
 [^3]: How to know if a point is inside a circle? [link](https://math.stackexchange.com/questions/198764/how-to-know-if-a-point-is-inside-a-circle)
+[^4]: Wikipedia - Circular Mean [link](https://en.wikipedia.org/wiki/Circular_mean)
