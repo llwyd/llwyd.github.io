@@ -53,26 +53,20 @@ In my implementation I had separate radii for _separation_ and _Cohesion + Align
 Once nearby birds are collected the average alignment can be calculated using a _circular mean_, which is a method for averaging cyclic values such as an angle [^4].
 
 {% highlight rust %}
-fn circular_mean(bird: &Vec <Bird>) -> f32
-{
-    let num_birds = bird.len();
+/* Collect averages of sin and cos of angles */
+let mut average_sin = 0.0;
+let mut average_cos = 0.0;
 
-    /* Collect averages of sin and cos of angles */
-    let mut average_sin = 0.0;
-    let mut average_cos = 0.0;
-
-    for i in 0..num_bird{
-        average_sin += bird[i].angle().sin();
-        average_cos += bird[i].angle().cos();
-    }
-    
-    average_sin /= num_bird as f32;
-    average_cos /= num_bird as f32;
-   
-    /* Circular mean */
-    let average = average_sin.atan2(average_cos);
-    average
+for i in 0..num_birds{
+    average_sin += bird[i].angle().sin();
+    average_cos += bird[i].angle().cos();
 }
+
+average_sin /= num_birds as f32;
+average_cos /= num_birds as f32;
+
+/* Return the circular mean */
+average_sin.atan2(average_cos)
 {% endhighlight %}
 
 The calculated angle is then used in conjunction with the bird's current angle to calculate a delta, which represents the change between the given bird and the average alignment of the nearby flock. The delta is wrapped between +/- 180 degrees so that if the bird needs to rotate anti-clockwise it subtracts the delta and adds if it needs to move clockwise.
@@ -88,7 +82,27 @@ bird_angle += delta * gain;
 {% endhighlight %}
 
 # Separation
-## Determining the Separation angle
+To determinte the separation angle, first the centre of mass of the nearby flock needs to be calculated. This can be achieved by taking the average of the `x` and the `y` points respectively, for example.
+
+
+{% highlight rust %}
+let mut average = pt2(0.0, 0.0);
+
+for i in 0..num_birds{
+    average.x += bird[i].position().x;
+    average.y += bird[i].position().y;
+}
+
+average.x /= num_birds as f32;
+average.y /= num_birds as f32;
+{% endhighlight %}
+
+The separation angle is then determined by calculating the angle difference between the given bird and the centre of mass (average position) of the flock. The separation _alignment_ (average alignment) of the flock is also calculated using the same method discussed earlier.
+
+{% highlight rust %}
+let separation_angle = (bird.y - flock.y).atan2(bird.x - flock.x);
+{% endhighlight %}
+
 
 # Cohesion
 
