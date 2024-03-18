@@ -16,6 +16,8 @@ I recently discovered _Boids_, which is a simulation of bird murmurations develo
 
 Application of these three rules determines the next position and orientation for a given bird in the murmuration. I highly recommend reading the original publication as well as Craig's personal website which provide further information and background on the simulation. I've added them as sources at the bottom. As an enthusiastic bird nerd, I thought this would be a fun project to have a go at using Rust. 
 
+# Angle Wrapping
+
 # What is a bird?
 For the sake of this model a bird is simply a triangle with a centre at position `(x, y)` and rotation.  The bird is represented by the struct with the following elements.
 
@@ -32,6 +34,24 @@ pub struct Bird{
     turn_angle:f32,
     avg_sep_angle:f32,
     avg_coh_angle:f32,
+}
+{% endhighlight %}
+
+This struct is then extended as a class with various getters and setters for the struct members.
+
+{% highlight rust %}
+impl Bird{
+    ...
+
+    pub fn angle(&self) -> f32{
+        self.angle
+    }
+    
+    pub fn set_rotation(&mut self, new_rotation:f32){
+        self.angle = new_rotation;
+    }
+
+    ...
 }
 {% endhighlight %}
 
@@ -103,6 +123,24 @@ The separation angle is then determined by calculating the angle difference betw
 let separation_angle = (bird.y - flock.y).atan2(bird.x - flock.x);
 {% endhighlight %}
 
+To apply the separation, first the bird is moved in the direction of the separation angle.
+
+The bird's alignment is then adjusted so that it moves _away_ from the flock's centre of mass. This is achieved by first normalising the bird's position with respect to the separation alignment and then adding or subtracting a fixed value depending on the bird's normalised position. This is achieved using the following procedure:
+
+1. Calculate how much the bird needs to rotate.
+
+    `let rotation_angle = 0.0 - separation_alignment`
+
+2. Rotate the bird's original position using a rotation matrix [^5]. 
+
+{% highlight rust %}
+let new_x = (x * angle.cos()) - (y * angle.sin());
+let new_y = (x * angle.sin()) + (y * angle.cos());
+let norm_angle = wrap_angle( bird_angle - rotation_angle );
+{% endhighlight %}
+
+
+This process 
 
 # Cohesion
 
@@ -119,3 +157,4 @@ printfln!("Hello, World\n");
 [^2]: Craig Reynolds - Boids, background and update [link](http://www.red3d.com/cwr/boids/)
 [^3]: How to know if a point is inside a circle? [link](https://math.stackexchange.com/questions/198764/how-to-know-if-a-point-is-inside-a-circle)
 [^4]: Wikipedia - Circular Mean [link](https://en.wikipedia.org/wiki/Circular_mean)
+[^5]: Wikipedia - Rotation Matrix [link](https://en.wikipedia.org/wiki/Rotation_matrix)
