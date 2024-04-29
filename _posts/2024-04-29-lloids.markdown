@@ -12,7 +12,7 @@ I recently discovered _Boids_, which is a simulation of bird murmurations develo
 - Separation
     - Birds should avoid colliding with nearby birds
 - Alignment
-    - Birds should align itself with nearby birds
+    - Birds should align themselves with nearby birds
 - Cohesion
     - Birds should move towards the centre of mass of nearby birds
 
