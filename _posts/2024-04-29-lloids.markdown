@@ -1,0 +1,45 @@
+---
+layout: post
+title:  "0x06 - Lloids (boids)"
+date:   2024-04-29 20:39:00 +0100
+categories: rust
+---
+
+
+
+I recently discovered _Boids_, which is a simulation of bird murmurations developed by Craig Reynolds in the 80's[^1][^2]. The simulation essentially boils down the interaction of the birds (known as 'Boids') into three rules[^1][^2]:
+
+- Separation
+    - Birds should avoid colliding with nearby birds
+- Alignment
+    - Birds should align itself with nearby birds
+- Cohesion
+    - Birds should move towards the centre of mass of nearby birds
+
+Application of these three rules determines the next position and orientation for a given bird in the murmuration. I highly recommend reading the original publication as well as Craig's personal website which provide further information and background on the simulation. I've added them as sources at the bottom. As an enthusiastic bird nerd, I thought this would be a fun project to have a go at using Rust.
+
+The result was a murmuration sim where the user would be able to configure the separation, alignment and cohesion as they see fit.
+
+![lloids](/assets/lloids_1.gif)
+
+
+Trails were added for artistic effect.
+
+![lloids](/assets/lloids_2.gif)
+
+Debug information such as interaction radii to facilitate bug diagnosis.
+
+![lloids](/assets/lloids_3.gif)
+
+
+The menu allows the user to cycle through the options using `TAB` and adjust the interaction gains using the arrow keys.
+
+![lloids](/assets/lloids_5.gif)
+
+This was a fun project and I soon realised that there were some unexpected challenges such as handling the turning as a given _boid_ approached the edge of the window.
+
+If you want to have a play yourself all the code is available on my GitHub profile [here](https://github.com/llwyd/lloids).
+
+# References
+[^1]: C. Reynolds - Flocks, herds and schools: A distributed behavioral model [link](https://dl.acm.org/doi/10.1145/37401.37406)
+[^2]: Craig Reynolds - Boids, background and update [link](http://www.red3d.com/cwr/boids/)
