@@ -4,9 +4,9 @@ title: About
 permalink: /about/
 ---
 
-Welcome to my blog
+Welcome to my blog,
 
-Home of my hobby projects
+Home of my hobby projects,
 
-I like to tinker. :)
+I like to tinker.
 
