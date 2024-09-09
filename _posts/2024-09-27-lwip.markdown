@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "0x07 - lwip musings"
+title:  "0x07 - Things I've learned about lwIP"
 date:   2024-09-07 20:39:00 +0100
 categories: lwip
 ---
@@ -20,7 +20,9 @@ Initialising the raw TCP stack begins with a call to `tcp_new()` which creates a
 attempting to restart the connection. Presumably the other PCB's were still being handled by lwIP and it had ran out of memory.
 
 ```
+cyw43_arch_lwip_begin()
 static struct tcp_pcb * tcp_pcb = tcp_new();
+cyw43_arch_lwip_end()
 if(tcp_pcb == NULL)
 {
     /* Something iffy with memory */
@@ -28,9 +30,19 @@ if(tcp_pcb == NULL)
 }
 ```
 
+Once an acquired PCB has been acquired you can then attempt to establish a connection. In my application I'm connecting to a local server which has a fixed IP, so there is no need to perform any DNS requests to resolve a domain name.  However if the ip is stored in a string you'll need to convert it from the ascii for (with dot notation) to network byte order[^5] [^6] format using the following example code:
+
+```
+ip_addr_t remote_addr;
+char * broker_ip = "192.168.1.101"
+ip4addr_aton((char*)broker_ip, &remote_addr);
+```
+
 
 # References
 [^1]: lwIP - A Lightweight TCP/IP stack - Summary [link](https://savannah.nongnu.org/projects/lwip/)
 [^2]: Fandom.com - lwIP wiki [link](https://lwip.fandom.com/wiki/Raw/TCP)
 [^3]: Raspberry Pi Documentation - pico_cyw43_arch [link](https://www.raspberrypi.com/documentation/pico-sdk/networking.html#pico_cyw43_arch)
-[^3]: Github - Pico SDK [link](https://github.com/raspberrypi/pico-sdk/blob/efe2103f9b28458a1615ff096054479743ade236/src/rp2_common/pico_cyw43_arch/include/pico/cyw43_arch.h#L277)
+[^4]: Github - Pico SDK [link](https://github.com/raspberrypi/pico-sdk/blob/efe2103f9b28458a1615ff096054479743ade236/src/rp2_common/pico_cyw43_arch/include/pico/cyw43_arch.h#L277)
+[^5]: Beej's guide to networking [link](https://beej.us/guide/bgnet/html/index-wide.html#inet_ntoaman)
+[^6]: inet_aton(3) - Linux man page [link](https://linux.die.net/man/3/inet_aton)
