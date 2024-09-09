@@ -9,7 +9,11 @@ I've been using lwip's raw TCP stack in anger over the past year or so and had i
 
 # What the hell is LWIP?
 
-It stands for _Lightweight Internet Protocol_ and is a minimal TCP/IP stack designed for use on embedded platforms[^1]. I've mostly been using the raw TCP functionality for sending and receiving MQTT data to/from a broker on a local network using a _Raspberry Pi Pico W_.
+It stands for _Lightweight Internet Protocol_ and is a minimal TCP/IP stack designed for use on embedded platforms[^1]. I've mostly been using the raw TCP functionality for sending and receiving MQTT data to/from a broker on a local network using a Raspberry Pi Pico W (henceforth known as 'pico' in this article).
+
+# Preliminary info
+When using lwip on a pico W there are three ways you can use it which are _poll_, _thread safe background_ and , _freertos_ [^3]. For my applications I use the _thread safe background_, where lwIP tasks are executed in an interrupt routine. The Pico SDK documentation states that when lwIP is used with this configuration, all calls into lwip need to be within cyw43_arch_lwip_begin() and cyw43_arch_lwip_end() blocks as the library **is not thread safe**[^3]. These functions act as a Critical Section to prevent lwIP's internals getting trashed because of buffer access via interrupt-context and normal-context. Inspecting the SDK you can see that these functions call into functions that block other contexts from accessing the lwip resources while the given context is using it [^4].
+
 
 # Initialising
 Initialising the raw TCP stack begins with a call to `tcp_new()` which creates a new instance of the TCP PCB (protocol control block). I found that this function would fail if I hadn't properly freed the previous instances when 
@@ -28,3 +32,5 @@ if(tcp_pcb == NULL)
 # References
 [^1]: lwIP - A Lightweight TCP/IP stack - Summary [link](https://savannah.nongnu.org/projects/lwip/)
 [^2]: Fandom.com - lwIP wiki [link](https://lwip.fandom.com/wiki/Raw/TCP)
+[^3]: Raspberry Pi Documentation - pico_cyw43_arch [link](https://www.raspberrypi.com/documentation/pico-sdk/networking.html#pico_cyw43_arch)
+[^3]: Github - Pico SDK [link](https://github.com/raspberrypi/pico-sdk/blob/efe2103f9b28458a1615ff096054479743ade236/src/rp2_common/pico_cyw43_arch/include/pico/cyw43_arch.h#L277)
