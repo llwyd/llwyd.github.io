@@ -62,8 +62,10 @@ if(err==ERR_OK)
 else
 {
     /* Connection attempt not successful, abort pcb instance and retry */
+    CRITICAL_SECTION_ENTER();
     tcp_abort(tcp_pcb);
     tcp_pcb = NULL;
+    CRITICAL_SECTION_EXIT();
 }
 ```
 # Aborting the connection
@@ -91,12 +93,60 @@ if( err != ERR_OK )
 }
 ```
 
-
 # Receiving Data
+Receiving data is a bit more involved than the previously discussed sections.  It utilises a callback function which lwIP calls when there is incoming TCP data to process. The received data is referenced by a _packet buffer_ (`pbuf`) singly-linked list[^9]. This linked-list represents a single data packet[^9].  The callback function needs to iterate through the linked-list and copy the data into a local buffer using `pbuf_copy_partial` if it is needed outside of the callback. The pbuf data can also be interacted with directly if necessary. Once the linked-list has been traversed `tcp_recved` is called which notifies the lwIP driver that more data is ready to be received.  Finally, the linked-list is de-allocated using `pbuf_free`. This last step is crucial or else you will eventually run out of memory.
+```
+static err_t Recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
+{
+    (void)arg;
+    (void)err;
+    err_t ret = ERR_OK;
+    
+    if( p != NULL )
+    {
+        /* Traverse the linked-list */
+        for(struct pbuf *q = p; q != NULL; q = q->next )
+        {
+            uint16_t bytes_copied = pbuf_copy_partial(q, recv_buffer, RECV_BUFFER_SIZE, 0);
+            if(bytes_copied == 0U)
+            {
+                /* Failed to copy anything */
+            }
+        }
+        tcp_recved(tpcb, p->tot_len);
+        pbuf_free(p);
+    }
+    else
+    {
+        /* Connection was closed from the sending side, need to return ERR_CLSD so that
+         * lwIP can handle it appropriately. */
+        ret = ERR_CLSD;
+    }
+
+    return ret;
+}
+```
 
 # Handling Errors
-
-# Closing Remarks
+Registering a callback for errors is useful for driving a comms state machine. I typically use the Error callback function to detect a connection reset from the server so that a re-connection routine can be initiated.
+```
+static void Error(void *arg, err_t err)
+{
+    (void)arg;
+    switch(err)
+    {
+        case ERR_RST:
+        {
+            /* Emit event to initiate a reconnection here */
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+}
+```
 
 # References
 [^1]: lwIP - A Lightweight TCP/IP stack - Summary [link](https://savannah.nongnu.org/projects/lwip/)
@@ -107,3 +157,4 @@ if( err != ERR_OK )
 [^6]: inet_aton(3) - Linux man page [link](https://linux.die.net/man/3/inet_aton)
 [^7]: Github - pico-examples [link](https://github.com/raspberrypi/pico-examples/blob/master/pico_w/wifi/tcp_client/picow_tcp_client.c)
 [^8]: lwIP - TCP Raw [link](https://www.nongnu.org/lwip/2_0_x/group__tcp__raw.html)
+[^8]: lwIP - Packet Buffers (PBUF) [link](https://www.nongnu.org/lwip/2_0_x/group__pbuf.html)
