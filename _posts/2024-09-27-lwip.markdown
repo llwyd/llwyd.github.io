@@ -12,7 +12,7 @@ I've been using lwip's raw TCP stack in anger over the past year or so and had i
 It stands for _Lightweight Internet Protocol_ and is a minimal TCP/IP stack designed for use on embedded platforms[^1]. I've mostly been using the raw TCP functionality for sending and receiving MQTT data to/from a broker on a local network using a Raspberry Pi Pico W (henceforth known as 'pico' in this article).
 
 # Preliminary info
-When using lwip on a pico W there are three ways you can use it which are _poll_, _thread safe background_ and , _freertos_ [^3]. For my applications I use the _thread safe background_, where lwIP tasks are executed in an interrupt routine. The Pico SDK documentation states that when lwIP is used with this configuration, all calls into lwip need to be within `cyw43_arch_lwip_begin()` and `cyw43_arch_lwip_end()` blocks as the library **is not thread safe**[^3]. These functions act as a Critical Section to prevent lwIP's internals getting trashed because of buffer access via interrupt-context and normal-context. Inspecting the SDK you can see that these functions call into functions that block other contexts from accessing the lwip resources while the given context is using it [^4]. When using lwIP on a different platform, these calls should be replaced with critical sections _for the interrupt handler that is driving lwip operation_. In my experience this is either a timer (as is the case with the pico) or an ethernet peripheral ISR.
+When using lwip on a pico W there are three ways you can use it which are _poll_, _thread safe background_ and , _freertos_ [^3]. For my applications I use the _thread safe background_, where lwIP tasks are executed in an interrupt routine. The Pico SDK documentation states that when lwIP is used with this configuration, all calls into lwip need to be within `cyw43_arch_lwip_begin()` and `cyw43_arch_lwip_end()` blocks as the library **is not thread safe**[^3]. These functions act as a Critical Section to prevent lwIP's internals getting trashed because of buffer access via interrupt-context and normal-context. Inspecting the SDK you can see that these functions call into functions that block other contexts from accessing the lwip resources while the given context is using it [^4]. When using lwIP on a different platform, these calls should be replaced with critical sections _for the interrupt handler that is driving lwip operation_. In my experience this is either a timer (as is the case with the pico) or an Ethernet peripheral ISR.
 
 
 # Initialising
@@ -40,7 +40,7 @@ tcp_err(tcp_pcb, ErrorCallback); // Called when there is an error / disconnect e
 
 These functions will be discussed in more detail later in the section **Callbacks**.
 
-Once an acquired PCB has been acquired and the callbacks defined you can then attempt to establish a connection. In my application I'm connecting to a local server which has a fixed IP, so there is no need to perform any DNS requests to resolve a domain name.  However if the ip is stored in a string you'll need to convert it from the ascii for (with dot notation) to network byte order[^5] [^6] format using the following example code:
+Once an acquired PCB has been acquired and the callbacks defined you can then attempt to establish a connection. In my application I'm connecting to a local server which has a fixed IP, so there is no need to perform any DNS requests to resolve a domain name.  However if the IP is stored in a string you'll need to convert it from the ASCII for (with dot notation) to network byte order[^5] [^6] format using the following example code:
 
 ```
 ip_addr_t remote_addr;
@@ -49,7 +49,7 @@ ip4addr_aton((char*)broker_ip, &remote_addr);
 ```
 
 # Connecting
-With all the various gubbins initialised we can attempt a connection using the following code, the return of the function determines whether the _attempt_ to connect was successful, not whether the _actual_ connection itself was established. In the `tcp_connect` function, we're passing the pointer to the pcb instance, our remote address (in the right format), the port number and finally a pointer to a callback function which lwIP will call upon a successful connection. Upon attempting the connection, the return code is checked and if it is _not_ `ERR_OK`, then de-allocate the pcb instance using `tcp_abort` and presumably get the program to try again.
+With all the various gubbins initialised we can attempt a connection using the following code, the return of the function determines whether the _attempt_ to connect was successful, not whether the _actual_ connection itself was established. In the `tcp_connect` function, we're passing the pointer to the PCB instance, our remote address (in the right format), the port number and finally a pointer to a callback function which lwIP will call upon a successful connection. Upon attempting the connection, the return code is checked and if it is _not_ `ERR_OK`, then de-allocate the PCB instance using `tcp_abort` and presumably get the program to try again.
 
 ```
 CRITICAL_SECTION_ENTER();
@@ -61,7 +61,7 @@ if(err==ERR_OK)
 }
 else
 {
-    /* Connection attempt not successful, abort pcb instance and retry */
+    /* Connection attempt not successful, abort PCB instance and retry */
     CRITICAL_SECTION_ENTER();
     tcp_abort(tcp_pcb);
     tcp_pcb = NULL;
@@ -69,12 +69,12 @@ else
 }
 ```
 # Aborting the connection
-In the previous section I introduced `tcp_abort`, which I think of as the nuclear approach to ending the TCP connection. You want to use this function to kill the `tcp_pcb` instance in the event of an _ungracious_ severing of the connection. By ungracious I mean scenarios such as physically removing the ethernet cable, turning off the router etc, essentially any scenario where a gracious closing of the connection cannot be carried out on the wire (or in the air).
+In the previous section I introduced `tcp_abort`, which I think of as the nuclear approach to ending the TCP connection. You want to use this function to kill the `tcp_pcb` instance in the event of an _ungracious_ severing of the connection. By ungracious I mean scenarios such as physically removing the Ethernet cable, turning off the router etc, essentially any scenario where a gracious closing of the connection cannot be carried out on the wire (or in the air).
 
 For scenarios where the tcp connection is _graciously_ severed, this is scenarios such as the server MQTT broker shutting down or your client/server intentionally ending the connection by sending a TCP reset. In this scenario you would use `tcp_close` and if that fails, call abort which the documentation states _"never fails"_[^8].
 
 # Sending Data
-Sending data is pretty straight forward, first you need to call `tcp_write`, which will copy the data to lwIP's stack or simply point to the data depending on what flags you provide.  In the snippit below I'm using a flag which copies the data to the lwIP stack. Once the data is written, then you can call `tcp_output` which will attempt to transmit the enqueued data. For my usage the data packets have always been small so my `Send` function has `tcp_write` and `tcp_output` called one after the other.
+Sending data is pretty straight forward, first you need to call `tcp_write`, which will copy the data to lwIP's stack or simply point to the data depending on what flags you provide.  In the snippet below I'm using a flag which copies the data to the lwIP stack. Once the data is written, then you can call `tcp_output` which will attempt to transmit the enqueued data. For my usage the data packets have always been small so my `Send` function has `tcp_write` and `tcp_output` called one after the other.
 ```
 CRITICAL_SECTION_ENTER();
 err_t err = tcp_write(tcp_pcb, buffer, len, TCP_WRITE_FLAG_COPY);
