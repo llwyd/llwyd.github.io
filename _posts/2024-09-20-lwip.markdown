@@ -40,8 +40,6 @@ tcp_recv(tcp_pcb, RecvCallback); // Called when a TCP packet is received
 tcp_err(tcp_pcb, ErrorCallback); // Called when there is an error / disconnect event on the socket
 {% endhighlight %}
 
-These functions will be discussed in more detail later in the section **Callbacks**.
-
 Once an acquired PCB has been acquired and the callbacks defined you can then attempt to establish a connection. In my application I'm connecting to a local server which has a fixed IP, so there is no need to perform any DNS requests to resolve a domain name.  However if the IP is stored in a string you'll need to convert it from the ASCII for (with dot notation) to network byte order[^5] [^6] format using the following example code:
 
 {% highlight c %}
