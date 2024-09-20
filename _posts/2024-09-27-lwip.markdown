@@ -1,0 +1,160 @@
+---
+layout: post
+title:  "0x07 - Things I've learned about lwIP's TCP library"
+date:   2024-09-07 20:39:00 +0100
+categories: lwip
+---
+
+I've been using lwip's raw TCP stack in anger over the past year or so and had idea to document some useful information I've discovered when using it. I've mostly been using the official documentation[^1],a fandom.com[^2] page I came across and the `tcp_client` example in the official pico SDK[^7]. It can be a bit of a faff to use so I figured I'd summarise stuff I've learned about using it on this page. It will be a living page that is updated when I find something relevant to add.
+
+# What the hell is LWIP?
+
+It stands for _Lightweight Internet Protocol_ and is a minimal TCP/IP stack designed for use on embedded platforms[^1]. I've mostly been using the raw TCP functionality for sending and receiving MQTT data to/from a broker on a local network using a Raspberry Pi Pico W (henceforth known as 'pico' in this article).
+
+# Preliminary info
+When using lwip on a pico W there are three ways you can use it which are _poll_, _thread safe background_ and , _freertos_ [^3]. For my applications I use the _thread safe background_, where lwIP tasks are executed in an interrupt routine. The Pico SDK documentation states that when lwIP is used with this configuration, all calls into lwip need to be within `cyw43_arch_lwip_begin()` and `cyw43_arch_lwip_end()` blocks as the library **is not thread safe**[^3]. These functions act as a Critical Section to prevent lwIP's internals getting trashed because of buffer access via interrupt-context and normal-context. Inspecting the SDK you can see that these functions call into functions that block other contexts from accessing the lwip resources while the given context is using it [^4]. When using lwIP on a different platform, these calls should be replaced with critical sections _for the interrupt handler that is driving lwip operation_. In my experience this is either a timer (as is the case with the pico) or an Ethernet peripheral ISR.
+
+
+# Initialising
+Initialising the raw TCP stack begins with a call to `tcp_new()` which creates a new instance of the TCP PCB (protocol control block). I found that this function would fail if I hadn't properly freed the previous instances when 
+attempting to restart the connection. Presumably the other PCB's were still being handled by lwIP and it had ran out of memory.
+
+```
+CRITICAL_SECTION_ENTER();
+static struct tcp_pcb * tcp_pcb = tcp_new();
+CRITICAL_SECTION_EXIT();
+if(tcp_pcb == NULL)
+{
+    /* Something iffy with memory */
+    assert(false);
+}
+```
+
+With the PCB acquired next is to initialise all the callback functions that will be used in our program.
+
+```
+tcp_sent(tcp_pcb, SentCallback); // Called when a TCP ACK is received
+tcp_recv(tcp_pcb, RecvCallback); // Called when a TCP packet is received
+tcp_err(tcp_pcb, ErrorCallback); // Called when there is an error / disconnect event on the socket
+```
+
+These functions will be discussed in more detail later in the section **Callbacks**.
+
+Once an acquired PCB has been acquired and the callbacks defined you can then attempt to establish a connection. In my application I'm connecting to a local server which has a fixed IP, so there is no need to perform any DNS requests to resolve a domain name.  However if the IP is stored in a string you'll need to convert it from the ASCII for (with dot notation) to network byte order[^5] [^6] format using the following example code:
+
+```
+ip_addr_t remote_addr;
+char * broker_ip = "192.168.1.101"
+ip4addr_aton((char*)broker_ip, &remote_addr);
+```
+
+# Connecting
+With all the various gubbins initialised we can attempt a connection using the following code, the return of the function determines whether the _attempt_ to connect was successful, not whether the _actual_ connection itself was established. In the `tcp_connect` function, we're passing the pointer to the PCB instance, our remote address (in the right format), the port number and finally a pointer to a callback function which lwIP will call upon a successful connection. Upon attempting the connection, the return code is checked and if it is _not_ `ERR_OK`, then de-allocate the PCB instance using `tcp_abort` and presumably get the program to try again.
+
+```
+CRITICAL_SECTION_ENTER();
+err_t err = tcp_connect(tcp_pcb, &remote_addr, 1234, ConnectedCallback);
+CRITICAL_SECTION_EXIT();
+if(err==ERR_OK)
+{
+    /* Connection attempt successful, await Connected callback function */
+}
+else
+{
+    /* Connection attempt not successful, abort PCB instance and retry */
+    CRITICAL_SECTION_ENTER();
+    tcp_abort(tcp_pcb);
+    tcp_pcb = NULL;
+    CRITICAL_SECTION_EXIT();
+}
+```
+# Aborting the connection
+In the previous section I introduced `tcp_abort`, which I think of as the nuclear approach to ending the TCP connection. You want to use this function to kill the `tcp_pcb` instance in the event of an _ungracious_ severing of the connection. By ungracious I mean scenarios such as physically removing the Ethernet cable, turning off the router etc, essentially any scenario where a gracious closing of the connection cannot be carried out on the wire (or in the air).
+
+For scenarios where the tcp connection is _graciously_ severed, this is scenarios such as the server MQTT broker shutting down or your client/server intentionally ending the connection by sending a TCP reset. In this scenario you would use `tcp_close` and if that fails, call abort which the documentation states _"never fails"_[^8].
+
+# Sending Data
+Sending data is pretty straight forward, first you need to call `tcp_write`, which will copy the data to lwIP's stack or simply point to the data depending on what flags you provide.  In the snippet below I'm using a flag which copies the data to the lwIP stack. Once the data is written, then you can call `tcp_output` which will attempt to transmit the enqueued data. For my usage the data packets have always been small so my `Send` function has `tcp_write` and `tcp_output` called one after the other.
+```
+CRITICAL_SECTION_ENTER();
+err_t err = tcp_write(tcp_pcb, buffer, len, TCP_WRITE_FLAG_COPY);
+CRITICAL_SECTION_EXIT();
+if( err != ERR_OK )
+{
+    /* Failed to write, could be an issue with memory in the lwIP instance */
+}
+    
+CRITICAL_SECTION_ENTER();
+err = tcp_output(tcp_pcb);  
+CRITICAL_SECTION_EXIT();
+if( err != ERR_OK )
+{
+    /* Failed to transmit the data, something very wrong */
+}
+```
+
+# Receiving Data
+Receiving data is a bit more involved than the previously discussed sections.  It utilises a callback function which lwIP calls when there is incoming TCP data to process. The received data is referenced by a _packet buffer_ (`pbuf`) singly-linked list[^9]. This linked-list represents a single data packet[^9].  The callback function needs to iterate through the linked-list and copy the data into a local buffer using `pbuf_copy_partial` if it is needed outside of the callback. The pbuf data can also be interacted with directly if necessary. Once the linked-list has been traversed `tcp_recved` is called which notifies the lwIP driver that more data is ready to be received.  Finally, the linked-list is de-allocated using `pbuf_free`. This last step is crucial or else you will eventually run out of memory.
+```
+static err_t Recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
+{
+    (void)arg;
+    (void)err;
+    err_t ret = ERR_OK;
+    
+    if( p != NULL )
+    {
+        /* Traverse the linked-list */
+        for(struct pbuf *q = p; q != NULL; q = q->next )
+        {
+            uint16_t bytes_copied = pbuf_copy_partial(q, recv_buffer, RECV_BUFFER_SIZE, 0);
+            if(bytes_copied == 0U)
+            {
+                /* Failed to copy anything */
+            }
+        }
+        tcp_recved(tpcb, p->tot_len);
+        pbuf_free(p);
+    }
+    else
+    {
+        /* Connection was closed from the sending side, need to return ERR_CLSD so that
+         * lwIP can handle it appropriately. */
+        ret = ERR_CLSD;
+    }
+
+    return ret;
+}
+```
+
+# Handling Errors
+Registering a callback for errors is useful for driving a comms state machine. I typically use the Error callback function to detect a connection reset from the server so that a re-connection routine can be initiated.
+```
+static void Error(void *arg, err_t err)
+{
+    (void)arg;
+    switch(err)
+    {
+        case ERR_RST:
+        {
+            /* Emit event to initiate a reconnection here */
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+}
+```
+
+# References
+[^1]: lwIP - A Lightweight TCP/IP stack - Summary [link](https://savannah.nongnu.org/projects/lwip/)
+[^2]: Fandom.com - lwIP wiki [link](https://lwip.fandom.com/wiki/Raw/TCP)
+[^3]: Raspberry Pi Documentation - pico_cyw43_arch [link](https://www.raspberrypi.com/documentation/pico-sdk/networking.html#pico_cyw43_arch)
+[^4]: Github - Pico SDK [link](https://github.com/raspberrypi/pico-sdk/blob/efe2103f9b28458a1615ff096054479743ade236/src/rp2_common/pico_cyw43_arch/include/pico/cyw43_arch.h#L277)
+[^5]: Beej's guide to networking [link](https://beej.us/guide/bgnet/html/index-wide.html#inet_ntoaman)
+[^6]: inet_aton(3) - Linux man page [link](https://linux.die.net/man/3/inet_aton)
+[^7]: Github - pico-examples [link](https://github.com/raspberrypi/pico-examples/blob/master/pico_w/wifi/tcp_client/picow_tcp_client.c)
+[^8]: lwIP - TCP Raw [link](https://www.nongnu.org/lwip/2_0_x/group__tcp__raw.html)
+[^9]: lwIP - Packet Buffers (PBUF) [link](https://www.nongnu.org/lwip/2_0_x/group__pbuf.html)
