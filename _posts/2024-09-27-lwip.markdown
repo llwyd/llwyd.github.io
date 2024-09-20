@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "0x07 - Things I've learned about lwIP's TCP library"
-date:   2024-20-09 20:39:00 +0100
+date:   2024-09-20 20:39:00 +0100
 categories: lwip
 ---
 
